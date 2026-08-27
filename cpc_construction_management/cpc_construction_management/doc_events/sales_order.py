@@ -1,0 +1,149 @@
+import frappe
+from frappe import _
+
+
+def validate(doc, method=None):
+	if not doc.cpc_contract:
+		return
+
+	_fetch_from_contract_if_blank(doc)
+	_populate_items_from_boq_if_blank(doc)
+	_validate_items(doc)
+	_refresh_related_sales_orders(doc)
+
+
+def _fetch_from_contract_if_blank(doc):
+	"""Safety net for API-created Sales Orders — the client script
+	handles the interactive fetch when a user picks the contract.
+
+	Fetches into production's existing fields (advance_payment,
+	retention) rather than duplicating them — confirmed via the site's
+	existing Sales Order client script, which already computes
+	retention_amount off `retention` on change/validate."""
+	contract = frappe.db.get_value(
+		"Construction Contract",
+		doc.cpc_contract,
+		["customer", "project", "advance_percent", "retention_percent"],
+		as_dict=True,
+	)
+	if not contract:
+		frappe.throw(_("Construction Contract {0} not found.").format(doc.cpc_contract))
+
+	if not doc.customer:
+		doc.customer = contract.customer
+	if not doc.project:
+		doc.project = contract.project
+	if doc.get("advance_payment") is None:
+		doc.advance_payment = contract.advance_percent
+	if doc.get("retention") is None:
+		doc.retention = contract.retention_percent
+
+
+def _populate_items_from_boq_if_blank(doc):
+	"""Safety net for API-created Sales Orders. Unlike the client
+	script (which replaces the items table every time the contract
+	field changes, since that's an interactive re-pick), this only
+	fires when items is empty — an API caller may be creating the SO
+	and setting items in the same call, and this shouldn't clobber
+	that."""
+	if doc.items:
+		return
+
+	boq_items = frappe.get_all(
+		"Contract BOQ Item",
+		filters={"parent": doc.cpc_contract, "parenttype": "Construction Contract"},
+		fields=["item_code", "qty", "rate"],
+		order_by="idx asc",
+	)
+
+	for row in boq_items:
+		if not row.item_code:
+			continue
+		doc.append("items", {
+			"item_code": row.item_code,
+			"qty": row.qty,
+			"rate": row.rate,
+			"item_name":row.custom_boq_id
+		})
+
+
+def _validate_items(doc):
+	"""Only items sourced from this contract may appear on the SO."""
+	bad_rows = []
+
+	for row in doc.items:
+		if not row.item_code:
+			continue
+
+		source_contract = frappe.db.get_value("Item", row.item_code, "cpc_source_contract")
+
+		if source_contract != doc.cpc_contract:
+			bad_rows.append(row.idx)
+
+	if bad_rows:
+		frappe.throw(
+			_("Row(s) {0}: Item does not belong to Construction Contract {1}. Only items pushed from that contract's BOQ may be added.").format(
+				", ".join(str(r) for r in bad_rows), doc.cpc_contract
+			)
+		)
+
+
+def _refresh_related_sales_orders(doc):
+	if not doc.cpc_is_change_order:
+		doc.cpc_related_sales_orders = []
+		return
+
+	related_names = frappe.get_all(
+		"Sales Order",
+		filters={"cpc_contract": doc.cpc_contract, "name": ["!=", doc.name or ""]},
+		pluck="name",
+		order_by="creation asc",
+	)
+
+	doc.set("cpc_related_sales_orders", [])
+	for name in related_names:
+		doc.append("cpc_related_sales_orders", {"sales_order": name})
+
+
+@frappe.whitelist()
+def get_related_sales_orders(cpc_contract, exclude=None):
+	"""Called from the client so the list refreshes live, before save,
+	the moment the checkbox is ticked."""
+	if not cpc_contract:
+		return []
+	filters = {"cpc_contract": cpc_contract}
+	if exclude:
+		filters["name"] = ["!=", exclude]
+	return frappe.get_all("Sales Order", filters=filters, pluck="name", order_by="creation asc")
+
+
+
+def on_submit(doc, method=None):
+	_sync_project_sales_order(doc)
+
+
+def _sync_project_sales_order(doc):
+	"""Project.sales_order can only hold a single back-reference, so it
+	represents "the base RPO for this project" — not every SO raised
+	against the contract (see US-05: a contract/project can have many
+	variation/change-order SOs). Only the original order writes this
+	field, and only if some other base RPO hasn't already claimed it
+	(e.g. this project was somehow re-pointed at a different order)."""
+	if doc.cpc_is_change_order or not doc.project:
+		return
+
+	current = frappe.db.get_value("Project", doc.project, "sales_order")
+	if current and current != doc.name:
+		# a different base RPO already owns this Project's back-link —
+		# don't silently overwrite it
+		frappe.msgprint(
+			_("Note: Project {0} is already linked to Sales Order {1}. Its Connections tab won't show {2} unless you update this manually.").format(
+				doc.project, current, doc.name
+			),
+			alert=True,
+			indicator="orange",
+		)
+		return
+
+	if current != doc.name:
+		frappe.db.set_value("Project", doc.project, "sales_order", doc.name, update_modified=False)
