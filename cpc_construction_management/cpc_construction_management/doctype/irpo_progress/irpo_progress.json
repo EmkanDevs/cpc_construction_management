@@ -1,0 +1,587 @@
+{
+ "doctype": "DocType",
+ "name": "IRPO Progress",
+ "module": "Cpc Construction Management",
+ "custom": 0,
+ "istable": 0,
+ "issingle": 0,
+ "is_submittable": 1,
+ "track_changes": 1,
+ "quick_entry": 0,
+ "engine": "InnoDB",
+ "autoname": "naming_series:",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "irpo_task",
+ "field_order": [
+  "naming_series",
+  "section_context",
+  "irpo_task",
+  "parent_boq_task",
+  "project",
+  "column_break_ctx",
+  "contract",
+  "sales_order",
+  "sales_order_item",
+  "boq_code",
+  "section_period",
+  "calendar_week",
+  "week_year",
+  "week_number",
+  "column_break_period",
+  "week_start_date",
+  "week_ending",
+  "measurement_cutoff_date",
+  "section_basis",
+  "planned_start_date_snapshot",
+  "reporting_anchor_snapshot",
+  "execution_week",
+  "column_break_basis",
+  "entered_by",
+  "entered_on",
+  "last_material_editor",
+  "sent_for_approval_on",
+  "section_measurement",
+  "input_mode",
+  "base_qty_snapshot",
+  "quantity_basis_label",
+  "base_revision_reference",
+  "column_break_measure",
+  "cum_completed_qty",
+  "cum_percent",
+  "remaining_qty",
+  "no_change",
+  "remarks",
+  "section_previous",
+  "previous_progress_reference",
+  "prev_completed_qty_snapshot",
+  "prev_percent_same_base",
+  "column_break_prev",
+  "period_completed_qty_snapshot",
+  "period_percent_same_base",
+  "section_recalc",
+  "recalculation_log",
+  "section_audit",
+  "workflow_state",
+  "approved_by",
+  "approved_on",
+  "returned_by",
+  "returned_on",
+  "return_reason",
+  "column_break_audit",
+  "cancelled_by",
+  "cancelled_on",
+  "cancellation_reason",
+  "hold_exception_note",
+  "hold_exception_reviewed_by",
+  "hold_exception_reviewed_on",
+  "downstream_dependency_refs",
+  "active_key",
+  "section_hold",
+  "partial_hold_exception",
+  "hold_exception_reason",
+  "requires_hold_review",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "IRPO-PRG-.YYYY.-",
+   "default": "IRPO-PRG-.YYYY.-",
+   "reqd": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "section_context",
+   "fieldtype": "Section Break",
+   "label": "IRPO Context"
+  },
+  {
+   "fieldname": "irpo_task",
+   "fieldtype": "Link",
+   "options": "Task",
+   "label": "IRPO",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "parent_boq_task",
+   "fieldtype": "Link",
+   "options": "Task",
+   "label": "Parent BOQ Task",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "options": "Project",
+   "label": "Project",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_ctx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contract",
+   "fieldtype": "Link",
+   "options": "Construction Contract",
+   "label": "Contract",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "options": "Sales Order",
+   "label": "Sales Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_order_item",
+   "fieldtype": "Data",
+   "label": "Sales Order Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "boq_code",
+   "fieldtype": "Data",
+   "label": "BOQ Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_period",
+   "fieldtype": "Section Break",
+   "label": "Reporting Period"
+  },
+  {
+   "fieldname": "calendar_week",
+   "fieldtype": "Link",
+   "options": "CPC Calendar Week",
+   "label": "Calendar Week",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "week_year",
+   "fieldtype": "Int",
+   "label": "ISO Week Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "week_number",
+   "fieldtype": "Int",
+   "label": "ISO Week Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_period",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "week_start_date",
+   "fieldtype": "Date",
+   "label": "Week Start (Monday)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "week_ending",
+   "fieldtype": "Date",
+   "label": "Week Ending (Sunday)",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "measurement_cutoff_date",
+   "fieldtype": "Date",
+   "label": "Measured Through",
+   "reqd": 1,
+   "description": "Completion is measured through this date. Must fall inside the selected week and not be in the future."
+  },
+  {
+   "fieldname": "section_basis",
+   "fieldtype": "Section Break",
+   "label": "Reporting Basis"
+  },
+  {
+   "fieldname": "planned_start_date_snapshot",
+   "fieldtype": "Date",
+   "label": "Planned Start (Snapshot)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reporting_anchor_snapshot",
+   "fieldtype": "Date",
+   "label": "Reporting Anchor (Snapshot)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_week",
+   "fieldtype": "Int",
+   "label": "Execution Week",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_basis",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "entered_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Entered By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "entered_on",
+   "fieldtype": "Datetime",
+   "label": "Entered On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "last_material_editor",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Last Material Editor",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sent_for_approval_on",
+   "fieldtype": "Datetime",
+   "label": "Sent For Approval On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "section_measurement",
+   "fieldtype": "Section Break",
+   "label": "Measurement"
+  },
+  {
+   "fieldname": "input_mode",
+   "fieldtype": "Select",
+   "label": "Input Mode",
+   "options": "Quantity\nPercentage",
+   "default": "Quantity",
+   "reqd": 1,
+   "description": "The controlling input. The other value is calculated by the server."
+  },
+  {
+   "fieldname": "base_qty_snapshot",
+   "fieldtype": "Float",
+   "label": "Base Quantity",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quantity_basis_label",
+   "fieldtype": "Data",
+   "label": "Quantity Basis",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_revision_reference",
+   "fieldtype": "Link",
+   "options": "IRPO Quantity Ledger",
+   "label": "Base Revision Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_measure",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cum_completed_qty",
+   "fieldtype": "Float",
+   "label": "Cumulative Completed Qty",
+   "precision": "6"
+  },
+  {
+   "fieldname": "cum_percent",
+   "fieldtype": "Percent",
+   "label": "Cumulative %",
+   "precision": "6",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "remaining_qty",
+   "fieldtype": "Float",
+   "label": "Remaining Qty",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "no_change",
+   "fieldtype": "Check",
+   "label": "No Change This Week"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_previous",
+   "fieldtype": "Section Break",
+   "label": "Previous Approved Progress (Snapshot at Approval)",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "previous_progress_reference",
+   "fieldtype": "Link",
+   "options": "IRPO Progress",
+   "label": "Previous Progress Record",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "prev_completed_qty_snapshot",
+   "fieldtype": "Float",
+   "label": "Previous Completed Qty",
+   "precision": "6",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "prev_percent_same_base",
+   "fieldtype": "Percent",
+   "label": "Previous % (Same Base)",
+   "precision": "6",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_prev",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "period_completed_qty_snapshot",
+   "fieldtype": "Float",
+   "label": "This Period Qty",
+   "precision": "6",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "period_percent_same_base",
+   "fieldtype": "Percent",
+   "label": "This Period % (Same Base)",
+   "precision": "6",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "section_audit",
+   "fieldtype": "Section Break",
+   "label": "Approval, Return and Audit",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "options": "Workflow State",
+   "label": "Workflow State",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Approved By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "returned_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Returned By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "returned_on",
+   "fieldtype": "Datetime",
+   "label": "Returned On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "return_reason",
+   "fieldtype": "Small Text",
+   "label": "Return Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_audit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Cancelled By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "cancelled_on",
+   "fieldtype": "Datetime",
+   "label": "Cancelled On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "cancellation_reason",
+   "fieldtype": "Small Text",
+   "label": "Cancellation Reason",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "hold_exception_note",
+   "fieldtype": "Small Text",
+   "label": "Hold Exception Note",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "hold_exception_reviewed_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Hold Exception Reviewed By",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "hold_exception_reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Hold Exception Reviewed On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "downstream_dependency_refs",
+   "fieldtype": "Small Text",
+   "label": "Downstream Dependencies",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "active_key",
+   "fieldtype": "Data",
+   "label": "Active Chain Key",
+   "unique": 1,
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "options": "IRPO Progress",
+   "label": "Amended From",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "section_recalc",
+   "fieldtype": "Section Break",
+   "label": "Recalculation Audit (Late-Entry Impact)",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "recalculation_log",
+   "fieldtype": "Table",
+   "options": "CPC IRPO Progress Recalc Event",
+   "label": "Recalculation Log",
+   "read_only": 1,
+   "description": "Automatically appended when a later period's stored increment changes because an earlier period was approved or cancelled after the fact."
+  },
+  {
+   "fieldname": "section_hold",
+   "fieldtype": "Section Break",
+   "label": "Hold Exception",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "partial_hold_exception",
+   "fieldtype": "Check",
+   "label": "Partial-Period Hold Exception"
+  },
+  {
+   "fieldname": "hold_exception_reason",
+   "fieldtype": "Small Text",
+   "label": "Hold Exception Reason",
+   "depends_on": "partial_hold_exception"
+  },
+  {
+   "fieldname": "requires_hold_review",
+   "fieldtype": "Check",
+   "label": "Requires PM Hold Review",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "IRPO Progress Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  },
+  {
+   "role": "Projects User",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ]
+}

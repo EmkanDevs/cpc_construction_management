@@ -111,12 +111,12 @@
 // 		// (the "BOQ Id" column) is set from the item's item_name — no
 // 		// separate BOQ-code stamp is needed since item_code on this
 // 		// row already IS the BOQ code (cpc_boq_code = item_code).
-// 		frappe.db.get_value("Item", row.item_code, ["standard_rate", "item_name"]).then(({ message }) => {
+// 		frappe.db.get_value("Item", row.item_code, ["standard_rate", "cpc_boq_code"]).then(({ message }) => {
 // 			if (!message) return;
 // 			if (message.standard_rate) {
 // 				frappe.model.set_value(cdt, cdn, "rate", message.standard_rate);
 // 			}
-// 			frappe.model.set_value(cdt, cdn, "custom_boq_id", message.item_name);
+// 			frappe.model.set_value(cdt, cdn, "custom_boq_id", message.cpc_boq_code);
 // 		});
 // 	},
 // });
@@ -200,6 +200,11 @@
 // // to load in the browser. The server always returns a plain array of
 // // row-arrays regardless of format, which apply_uploaded_rows() maps
 // // onto IRPO_COLUMNS the same way either way.
+// //
+// // NOTE: the CSV/XLSX round-trip does NOT carry task_name, so rows
+// // loaded via "Get Previous IRPO" that are then downloaded and
+// // re-uploaded will come back in as NEW IRPOs rather than updates to
+// // the originals. Pre-existing limitation of the file round-trip.
 // // ---------------------------------------------------------------------
 
 // const IRPO_COLUMNS = [
@@ -209,6 +214,7 @@
 // 	{ fieldname: "exp_end_date", label: __("Planned End") },
 // 	{ fieldname: "cpc_budget_qty", label: __("Budget Qty") },
 // 	{ fieldname: "cpc_budget_amount", label: __("Budget Amount") },
+// 	{ fieldname: "account", label: __("Account") },
 // ];
 
 // function csv_row(values) {
@@ -241,6 +247,18 @@
 // 				onchange: () => on_boq_code_change(),
 // 			},
 // 			{
+// 				// Shown only when the selected BOQ line already has
+// 				// IRPOs created against it (toggled in on_boq_code_change
+// 				// via toggle_get_previous_button). Loads those existing
+// 				// IRPOs into the table below, tagged with task_name so
+// 				// "Create IRPOs" updates them in place instead of
+// 				// creating duplicates.
+// 				fieldname: "get_previous_irpos",
+// 				fieldtype: "Button",
+// 				label: __("Get Previous IRPO"),
+// 				click: () => fetch_previous_irpos(),
+// 			},
+// 			{
 // 				fieldname: "irpos",
 // 				label: __("IRPOs"),
 // 				fieldtype: "Table",
@@ -249,19 +267,25 @@
 // 				fields: [
 // 					{ fieldname: "subject", label: __("Subject"), fieldtype: "Data", in_list_view: 1, reqd: 1, columns: 2 },
 // 					{ fieldname: "cpc_uom", label: __("UoM"), fieldtype: "Link", options: "UOM", in_list_view: 1, reqd: 1, columns: 1 },
-// 					{ fieldname: "exp_start_date", label: __("Planned Start"), fieldtype: "Date", in_list_view: 1, columns: 2 },
-// 					{ fieldname: "exp_end_date", label: __("Planned End"), fieldtype: "Date", in_list_view: 1, columns: 2 },
-// 					{ fieldname: "cpc_budget_qty", label: __("Budget Qty"), fieldtype: "Float", in_list_view: 1, columns: 1,
-// 					  onchange: () => refresh_budget_display() },
-// 					{ fieldname: "cpc_budget_amount", label: __("Budget Amount"), fieldtype: "Currency", in_list_view: 1, columns: 1,
-// 					  onchange: () => refresh_budget_display() },
+// 					{ fieldname: "exp_start_date", label: __("Planned Start"), fieldtype: "Date", in_list_view: 1, columns: 1 },
+// 					{ fieldname: "exp_end_date", label: __("Planned End"), fieldtype: "Date", in_list_view: 1, columns: 1 },
+// 					{ fieldname: "account", label: __("Account"), fieldtype: "Link", options: "Account", in_list_view: 1, reqd: 1, columns: 2 },
+// 					{ fieldname: "cpc_budget_qty", label: __("Budget Qty"), fieldtype: "Float", in_list_view: 1, columns: 1, onchange: () => refresh_budget_display() },
+// 					{ fieldname: "cpc_budget_amount", label: __("Budget Amount"), fieldtype: "Currency", in_list_view: 1, columns: 1, onchange: () => refresh_budget_display() },
+					
+// 					// Hidden — not in_list_view, so it doesn't render as a
+// 					// grid column. Carries the existing Task's `name` for
+// 					// rows loaded via "Get Previous IRPO", so the server
+// 					// can tell "update this Task" apart from "create a
+// 					// new one". Left blank on genuinely new rows.
+// 					{ fieldname: "task_name", label: __("Task Name"), fieldtype: "Data", read_only: 1 },
 // 				],
 // 				data: [],
 // 				get_data: () => dialog.fields_dict.irpos.df.data,
 // 			},
 // 			{ fieldname: "budget_info", fieldtype: "HTML" },
 // 		],
-// 		primary_action_label: __("Create IRPOs"),
+// 		primary_action_label: __("Save IRPOs"),
 // 		primary_action: (values) => submit_irpos(values),
 // 	});
 
@@ -313,13 +337,14 @@
 // 				const body = rows.map((row, i) => `
 // 					<tr>
 // 						<td>${i + 1}</td>
-// 						<td>${frappe.utils.escape_html(row.subject)}</td>
+// 						<td><a href="#" class="cpc-open-irpo-task" data-task-name="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(row.subject)}</a></td>
 // 						<td>${frappe.utils.escape_html(row.cpc_uom || "")}</td>
 // 						<td>${flt(row.cpc_budget_qty)}</td>
 // 						<td>${format_currency(row.cpc_budget_amount)}</td>
+// 						<td>${frappe.utils.escape_html(row.account || "")}</td>
 // 						<td>${row.exp_start_date || ""} → ${row.exp_end_date || ""}</td>
 // 					</tr>
-// 				`).join("") || `<tr><td colspan="6" class="text-muted">${__("No IRPOs yet")}</td></tr>`;
+// 				`).join("") || `<tr><td colspan="7" class="text-muted">${__("No IRPOs yet")}</td></tr>`;
 
 // 				const popup = new frappe.ui.Dialog({
 // 					title: __("{0} — Existing IRPOs ({1})", [boq_code, rows.length]),
@@ -329,21 +354,53 @@
 // 					<table class="table table-bordered">
 // 						<thead><tr>
 // 							<th>#</th><th>${__("IRPO / Subject")}</th><th>${__("UoM")}</th>
-// 							<th>${__("Budget Qty")}</th><th>${__("Budget Amount")}</th><th>${__("Planned Dates")}</th>
+// 							<th>${__("Budget Qty")}</th><th>${__("Budget Amount")}</th><th>${__("Account")}</th><th>${__("Planned Dates")}</th>
 // 						</tr></thead>
 // 						<tbody>${body}</tbody>
 // 					</table>
 // 				`);
+// 				popup.fields_dict.list_html.$wrapper.find(".cpc-open-irpo-task").on("click", function (e) {
+// 					e.preventDefault();
+// 					frappe.set_route("Form", "Task", $(this).data("task-name"));
+// 				});
 // 				popup.show();
 // 			},
 // 		});
 // 	}
 
+// 	// function on_boq_code_change() {
+// 	// 	const boq_code = dialog.get_value("boq_code");
+// 	// 	if (!boq_code) {
+// 	// 		budget_state = { cost_budget: 0, existing_allocated: 0 };
+// 	// 		render_budget_info();
+// 	// 		toggle_get_previous_button(0);
+// 	// 		return;
+// 	// 	}
+// 	// 	frappe.call({
+// 	// 		method: "cpc_construction_management.cpc_construction_management.doc_events.task.get_boq_budget_summary",
+// 	// 		args: { sales_order: frm.doc.name, boq_code },
+// 	// 		callback: (r) => {
+// 	// 			budget_state = {
+// 	// 				cost_budget: (r.message || {}).cost_budget || 0,
+// 	// 				existing_allocated: (r.message || {}).allocated || 0,
+// 	// 			};
+// 	// 			render_budget_info();
+// 	// 			toggle_get_previous_button((r.message || {}).irpo_count || 0);
+// 	// 		},
+// 	// 	});
+// 	// }
+
 // 	function on_boq_code_change() {
 // 		const boq_code = dialog.get_value("boq_code");
+
+// 		// Always clear whatever's in the table first — rows from the
+// 		// previous BOQ line must never carry over to the new selection.
+// 		reset_irpos_table();
+
 // 		if (!boq_code) {
 // 			budget_state = { cost_budget: 0, existing_allocated: 0 };
 // 			render_budget_info();
+// 			toggle_get_previous_button(0);
 // 			return;
 // 		}
 // 		frappe.call({
@@ -355,6 +412,55 @@
 // 					existing_allocated: (r.message || {}).allocated || 0,
 // 				};
 // 				render_budget_info();
+// 				toggle_get_previous_button((r.message || {}).irpo_count || 0);
+// 			},
+// 		});
+// 	}
+
+
+// 	function toggle_get_previous_button(count) {
+// 		dialog.fields_dict.get_previous_irpos.$wrapper.toggle(!!count);
+// 	}
+
+// 	function fetch_previous_irpos() {
+// 		// Appends the BOQ line's existing IRPOs to whatever is already
+// 		// in the table (per user's choice: append, don't replace), so
+// 		// rows already typed in aren't lost. Skips any IRPO whose
+// 		// task_name is already loaded, so clicking the button twice
+// 		// doesn't duplicate rows inside the dialog itself.
+// 		const boq_code = dialog.get_value("boq_code");
+// 		if (!boq_code) return;
+
+// 		frappe.call({
+// 			method: "cpc_construction_management.cpc_construction_management.doc_events.task.get_irpos_for_boq_line",
+// 			args: { sales_order: frm.doc.name, boq_code },
+// 			callback: (r) => {
+// 				const rows = r.message || [];
+// 				const already_loaded = new Set(
+// 					(dialog.fields_dict.irpos.df.data || []).map((row) => row.task_name).filter(Boolean)
+// 				);
+// 				const new_rows = rows
+// 					.filter((row) => !already_loaded.has(row.name))
+// 					.map((row) => ({
+// 						task_name: row.name,
+// 						subject: row.subject,
+// 						cpc_uom: row.cpc_uom,
+// 						exp_start_date: row.exp_start_date,
+// 						exp_end_date: row.exp_end_date,
+// 						cpc_budget_qty: row.cpc_budget_qty,
+// 						cpc_budget_amount: row.cpc_budget_amount,
+// 						account: row.account,
+// 					}));
+
+// 				if (!new_rows.length) {
+// 					frappe.show_alert({ message: __("No additional previous IRPOs to load."), indicator: "orange" });
+// 					return;
+// 				}
+
+// 				dialog.fields_dict.irpos.df.data.push(...new_rows);
+// 				dialog.fields_dict.irpos.grid.refresh();
+// 				render_budget_info();
+// 				frappe.show_alert({ message: __("Loaded {0} previous IRPO(s).", [new_rows.length]), indicator: "green" });
 // 			},
 // 		});
 // 	}
@@ -488,18 +594,26 @@
 // 			method: "cpc_construction_management.cpc_construction_management.doc_events.task.break_into_irpos",
 // 			args: { sales_order: frm.doc.name, boq_code: values.boq_code, irpos: values.irpos },
 // 			freeze: true,
-// 			freeze_message: __("Creating IRPOs..."),
+// 			freeze_message: __("Saving IRPOs..."),
 // 			callback: (r) => {
 // 				if (r.message) {
+// 					const { created = [], updated = [] } = r.message;
+// 					const parts = [];
+// 					if (created.length) parts.push(__("{0} created", [created.length]));
+// 					if (updated.length) parts.push(__("{0} updated", [updated.length]));
 // 					frappe.show_alert({
-// 						message: __("Created {0} IRPO(s) under {1}.", [r.message.irpos.length, r.message.boq_node]),
+// 						message: __("IRPOs saved under {0}: {1}.", [r.message.boq_node, parts.join(", ") || "0"]),
 // 						indicator: "green",
 // 					});
-// 					// Stay open: clear the grid, refresh summary + budget
-// 					// so the user can pick the next BOQ line right away.
+// 					// Clear the grid first, then refresh both the summary table
+// 					// and the budget info. on_boq_code_change() fetches fresh
+// 					// allocated/remaining figures from the server and calls
+// 					// render_budget_info() inside its own callback — so the
+// 					// "Remaining" value is always correct and never shows the
+// 					// stale pre-save amount.
 // 					reset_irpos_table();
 // 					render_boq_summary();
-// 					on_boq_code_change();
+// 					on_boq_code_change(); // re-fetches budget_state, then renders
 // 				}
 // 			},
 // 			always: () => dialog.get_primary_btn().prop("disabled", false),
@@ -529,23 +643,9 @@
 
 // 	render_boq_summary();
 // 	render_budget_info();
+// 	toggle_get_previous_button(0);
 // 	if (dialog.get_value("boq_code")) on_boq_code_change();
 // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -666,15 +766,14 @@ frappe.ui.form.on("Sales Order Item", {
 		if (!row.item_code) return;
 
 		// Rate defaults from the BOQ line's sell rate; custom_boq_id
-		// (the "BOQ Id" column) is set from the item's item_name — no
-		// separate BOQ-code stamp is needed since item_code on this
-		// row already IS the BOQ code (cpc_boq_code = item_code).
-		frappe.db.get_value("Item", row.item_code, ["standard_rate", "item_name"]).then(({ message }) => {
+		// (the "BOQ Id" column) is set from the item's cpc_boq_code —
+		// item_code is the generated Item, NOT the BOQ code itself.
+		frappe.db.get_value("Item", row.item_code, ["standard_rate", "cpc_boq_code"]).then(({ message }) => {
 			if (!message) return;
 			if (message.standard_rate) {
 				frappe.model.set_value(cdt, cdn, "rate", message.standard_rate);
 			}
-			frappe.model.set_value(cdt, cdn, "custom_boq_id", message.item_name);
+			frappe.model.set_value(cdt, cdn, "custom_boq_id", message.cpc_boq_code);
 		});
 	},
 });
@@ -772,6 +871,7 @@ const IRPO_COLUMNS = [
 	{ fieldname: "exp_end_date", label: __("Planned End") },
 	{ fieldname: "cpc_budget_qty", label: __("Budget Qty") },
 	{ fieldname: "cpc_budget_amount", label: __("Budget Amount") },
+	{ fieldname: "account", label: __("Account") },
 ];
 
 function csv_row(values) {
@@ -824,18 +924,29 @@ function show_irpo_dialog(frm, boq_lines) {
 				fields: [
 					{ fieldname: "subject", label: __("Subject"), fieldtype: "Data", in_list_view: 1, reqd: 1, columns: 2 },
 					{ fieldname: "cpc_uom", label: __("UoM"), fieldtype: "Link", options: "UOM", in_list_view: 1, reqd: 1, columns: 1 },
-					{ fieldname: "exp_start_date", label: __("Planned Start"), fieldtype: "Date", in_list_view: 1, columns: 2 },
-					{ fieldname: "exp_end_date", label: __("Planned End"), fieldtype: "Date", in_list_view: 1, columns: 2 },
-					{ fieldname: "cpc_budget_qty", label: __("Budget Qty"), fieldtype: "Float", in_list_view: 1, columns: 1,
-					  onchange: () => refresh_budget_display() },
-					{ fieldname: "cpc_budget_amount", label: __("Budget Amount"), fieldtype: "Currency", in_list_view: 1, columns: 1,
-					  onchange: () => refresh_budget_display() },
+					{ fieldname: "exp_start_date", label: __("Planned Start"), fieldtype: "Date", in_list_view: 1, columns: 1 },
+					{ fieldname: "exp_end_date", label: __("Planned End"), fieldtype: "Date", in_list_view: 1, columns: 1 },
+					{ fieldname: "account", label: __("Account"), fieldtype: "Link", options: "Account", in_list_view: 1, reqd: 1, columns: 2 },
+					{ fieldname: "cpc_budget_qty", label: __("Budget Qty"), fieldtype: "Float", in_list_view: 1, columns: 1, onchange: () => refresh_budget_display() },
+					{ fieldname: "cpc_budget_amount", label: __("Budget Amount"), fieldtype: "Currency", in_list_view: 1, columns: 1, onchange: () => refresh_budget_display() },
+
 					// Hidden — not in_list_view, so it doesn't render as a
 					// grid column. Carries the existing Task's `name` for
 					// rows loaded via "Get Previous IRPO", so the server
 					// can tell "update this Task" apart from "create a
 					// new one". Left blank on genuinely new rows.
 					{ fieldname: "task_name", label: __("Task Name"), fieldtype: "Data", read_only: 1 },
+
+					// Hidden — snapshot of cpc_budget_amount taken at the
+					// moment a row is loaded via "Get Previous IRPO".
+					// Used ONLY for the client-side "Remaining" preview
+					// (delta-based, see current_dialog_net_impact) so an
+					// unedited existing row contributes zero to the
+					// projected allocation instead of being double-
+					// counted against budget_state.existing_allocated
+					// (which already includes it, fetched fresh from the
+					// server). Never sent to / read by the server.
+					{ fieldname: "__original_amount", label: __("Original Amount"), fieldtype: "Currency", read_only: 1 },
 				],
 				data: [],
 				get_data: () => dialog.fields_dict.irpos.df.data,
@@ -857,7 +968,7 @@ function show_irpo_dialog(frm, boq_lines) {
 						<td>${frappe.utils.escape_html(row.boq_code)}</td>
 						<td>${frappe.utils.escape_html(row.description || "")}</td>
 						<td>${row.irpo_count}</td>
-						
+
 						<td><button class="btn btn-xs btn-default cpc-view-irpos" data-boq="${frappe.utils.escape_html(row.boq_code)}">${__("View")}</button></td>
 					</tr>
 				`).join("");
@@ -870,7 +981,7 @@ function show_irpo_dialog(frm, boq_lines) {
 									<th>${__("BOQ Item Code")}</th>
 									<th>${__("Description")}</th>
 									<th>${__("IRPO Count")}</th>
-									
+
 									<th>${__("Action")}</th>
 								</tr>
 							</thead>
@@ -894,13 +1005,14 @@ function show_irpo_dialog(frm, boq_lines) {
 				const body = rows.map((row, i) => `
 					<tr>
 						<td>${i + 1}</td>
-						<td>${frappe.utils.escape_html(row.subject)}</td>
+						<td><a href="#" class="cpc-open-irpo-task" data-task-name="${frappe.utils.escape_html(row.name)}">${frappe.utils.escape_html(row.subject)}</a></td>
 						<td>${frappe.utils.escape_html(row.cpc_uom || "")}</td>
 						<td>${flt(row.cpc_budget_qty)}</td>
 						<td>${format_currency(row.cpc_budget_amount)}</td>
+						<td>${frappe.utils.escape_html(row.account || "")}</td>
 						<td>${row.exp_start_date || ""} → ${row.exp_end_date || ""}</td>
 					</tr>
-				`).join("") || `<tr><td colspan="6" class="text-muted">${__("No IRPOs yet")}</td></tr>`;
+				`).join("") || `<tr><td colspan="7" class="text-muted">${__("No IRPOs yet")}</td></tr>`;
 
 				const popup = new frappe.ui.Dialog({
 					title: __("{0} — Existing IRPOs ({1})", [boq_code, rows.length]),
@@ -910,11 +1022,15 @@ function show_irpo_dialog(frm, boq_lines) {
 					<table class="table table-bordered">
 						<thead><tr>
 							<th>#</th><th>${__("IRPO / Subject")}</th><th>${__("UoM")}</th>
-							<th>${__("Budget Qty")}</th><th>${__("Budget Amount")}</th><th>${__("Planned Dates")}</th>
+							<th>${__("Budget Qty")}</th><th>${__("Budget Amount")}</th><th>${__("Account")}</th><th>${__("Planned Dates")}</th>
 						</tr></thead>
 						<tbody>${body}</tbody>
 					</table>
 				`);
+				popup.fields_dict.list_html.$wrapper.find(".cpc-open-irpo-task").on("click", function (e) {
+					e.preventDefault();
+					frappe.set_route("Form", "Task", $(this).data("task-name"));
+				});
 				popup.show();
 			},
 		});
@@ -922,6 +1038,11 @@ function show_irpo_dialog(frm, boq_lines) {
 
 	function on_boq_code_change() {
 		const boq_code = dialog.get_value("boq_code");
+
+		// Always clear whatever's in the table first — rows from the
+		// previous BOQ line must never carry over to the new selection.
+		reset_irpos_table();
+
 		if (!boq_code) {
 			budget_state = { cost_budget: 0, existing_allocated: 0 };
 			render_budget_info();
@@ -942,6 +1063,7 @@ function show_irpo_dialog(frm, boq_lines) {
 		});
 	}
 
+
 	function toggle_get_previous_button(count) {
 		dialog.fields_dict.get_previous_irpos.$wrapper.toggle(!!count);
 	}
@@ -952,6 +1074,13 @@ function show_irpo_dialog(frm, boq_lines) {
 		// rows already typed in aren't lost. Skips any IRPO whose
 		// task_name is already loaded, so clicking the button twice
 		// doesn't duplicate rows inside the dialog itself.
+		//
+		// __original_amount is stamped here as a snapshot of the
+		// server's current cpc_budget_amount for this row, at the
+		// moment it enters the dialog. This is the baseline the
+		// delta-based budget preview (current_dialog_net_impact) diffs
+		// against — it must NOT be recalculated later, or edits would
+		// stop being measured against the true original value.
 		const boq_code = dialog.get_value("boq_code");
 		if (!boq_code) return;
 
@@ -973,6 +1102,8 @@ function show_irpo_dialog(frm, boq_lines) {
 						exp_end_date: row.exp_end_date,
 						cpc_budget_qty: row.cpc_budget_qty,
 						cpc_budget_amount: row.cpc_budget_amount,
+						account: row.account,
+						__original_amount: flt(row.cpc_budget_amount) || 0,
 					}));
 
 				if (!new_rows.length) {
@@ -988,14 +1119,27 @@ function show_irpo_dialog(frm, boq_lines) {
 		});
 	}
 
-	function current_dialog_total() {
+	function current_dialog_net_impact() {
+		// Delta-based, per the required calculation:
+		//   existing unchanged row -> impact 0
+		//   existing edited row    -> impact = new amount - original amount
+		//   brand-new row          -> impact = full new amount (no task_name,
+		//                             so no snapshot — baseline is 0)
+		// budget_state.existing_allocated (fetched fresh from the server per
+		// BOQ line) already includes every currently-existing IRPO's amount,
+		// unchanged rows included — so summing full row amounts here would
+		// double count any row loaded via "Get Previous IRPO".
 		const rows = dialog.fields_dict.irpos.df.data || [];
-		return rows.reduce((sum, row) => sum + (flt(row.cpc_budget_amount) || 0), 0);
+		return rows.reduce((sum, row) => {
+			const current = flt(row.cpc_budget_amount) || 0;
+			const baseline = row.task_name ? (flt(row.__original_amount) || 0) : 0;
+			return sum + (current - baseline);
+		}, 0);
 	}
 
 	function render_budget_info() {
-		const in_dialog = current_dialog_total();
-		const allocated_total = budget_state.existing_allocated + in_dialog;
+		const net_impact = current_dialog_net_impact();
+		const allocated_total = budget_state.existing_allocated + net_impact;
 		const remaining = budget_state.cost_budget - allocated_total;
 		const over = remaining < 0;
 
@@ -1003,7 +1147,7 @@ function show_irpo_dialog(frm, boq_lines) {
 			<div class="text-muted" style="margin: 4px 0 12px; line-height: 1.8;">
 				BOQ Cost Budget: <b>${format_currency(budget_state.cost_budget)}</b><br>
 				Already Allocated (existing IRPOs): <b>${format_currency(budget_state.existing_allocated)}</b><br>
-				In This Dialog: <b>${format_currency(in_dialog)}</b><br>
+				Net Change (This Dialog): <b>${format_currency(net_impact)}</b><br>
 				Remaining: <b style="${over ? 'color:#d1242f;' : ''}">${format_currency(remaining)}</b>
 				${over ? '<span style="color:#d1242f;"> — exceeds BOQ budget</span>' : ''}
 			</div>
@@ -1128,11 +1272,15 @@ function show_irpo_dialog(frm, boq_lines) {
 						message: __("IRPOs saved under {0}: {1}.", [r.message.boq_node, parts.join(", ") || "0"]),
 						indicator: "green",
 					});
-					// Stay open: clear the grid, refresh summary + budget
-					// so the user can pick the next BOQ line right away.
+					// Clear the grid first, then refresh both the summary table
+					// and the budget info. on_boq_code_change() fetches fresh
+					// allocated/remaining figures from the server and calls
+					// render_budget_info() inside its own callback — so the
+					// "Remaining" value is always correct and never shows the
+					// stale pre-save amount.
 					reset_irpos_table();
 					render_boq_summary();
-					on_boq_code_change();
+					on_boq_code_change(); // re-fetches budget_state, then renders
 				}
 			},
 			always: () => dialog.get_primary_btn().prop("disabled", false),

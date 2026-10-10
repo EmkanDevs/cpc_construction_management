@@ -1,61 +1,42 @@
 
-# """
-# J3 · IRPO (US-06)
-# -----------------
-# Extends the native Task doctype (via doc_events, no controller override) so that:
-#   - a "BOQ Node" Task is the group row for one BOQ line (is_group = 1)
-#   - an "IRPO" Task is always a leaf under a BOQ Node (is_group = 0, no children allowed)
-
-# Lives at cpc_construction_management/cpc_construction_management/doc_events/task_irpo.py,
-# alongside the existing doc_events/sales_order.py (get_related_sales_orders).
-# Wire into hooks.py:
-
-#     doc_events = {
-#         "Task": {
-#             "validate": "cpc_construction_management.cpc_construction_management.doc_events.task_irpo.validate_irpo_task"
-#         }
-#     }
-
-# get_boq_line_source() below matches the real US-04 sales_order.js:
-# cpc_contract lives directly on the Sales Order, and a Sales Order
-# Item's item_code IS the BOQ code (no separate per-item stamp).
-
-# BOQ Node identity: subject = the Item Code itself (the BOQ line IS the
-# parent task). Each created IRPO is still a tree child via parent_task/
-# is_group (required for the Project Gantt/Tree + leaf enforcement), and
-# is additionally appended to the BOQ Node's native depends_on ("Dependent
-# Tasks") grid as a convenience view — that grid is not the source of the
-# parent/child relationship, just a visible list on the Node's own form.
-# """
+# import os
+# import datetime as dt
+# from io import BytesIO
 
 # import frappe
 # from frappe import _
-# from frappe.utils import flt
-# from frappe.utils.nestedset import NestedSet  # noqa: F401  (Task is a NestedSet; kept for reference)
-
+# from frappe.utils import flt, getdate
+# from frappe.utils.csvutils import read_csv_content
+# from frappe.utils import flt, getdate, nowdate
+# from erpnext.accounts.utils import get_fiscal_year
 
 # # ---------------------------------------------------------------------
-# # Validation: enforce the "IRPO is always a leaf" rule
+# # Validation Hook: Enforce the "IRPO is always a leaf" rule
 # # ---------------------------------------------------------------------
 
 # def validate_irpo_task(doc, method=None):
-#     """doc_events hook on Task.validate"""
-
-#     if not doc.get("cpc_node_type"):
+#     """
+#     doc_events hook on Task.validate
+#     Enforces:
+#       - BOQ Node: is_group = 1, cpc_is_irpo = 0
+#       - IRPO: is_group = 0, cpc_is_irpo = 1, must have BOQ Node as parent, UOM required
+#       - Unique IRPO code per project
+#     """
+#     node_type = doc.get("cpc_node_type")
+#     if not node_type:
 #         return
 
-#     if doc.cpc_node_type == "IRPO":
-#         # An IRPO is always a leaf.
+#     if node_type == "IRPO":
+#         # An IRPO is always a leaf activity
 #         doc.is_group = 0
 #         doc.cpc_is_irpo = 1
 
-#         # It cannot have children. On an existing doc, check the DB;
-#         # on a new doc this is moot (nothing can point at it yet).
+#         # Check existing children in DB
 #         if not doc.is_new():
 #             has_children = frappe.db.exists("Task", {"parent_task": doc.name})
 #             if has_children:
 #                 frappe.throw(
-#                     _("{0} is an IRPO and must stay a leaf activity — it cannot have child tasks.")
+#                     _("{0} is an IRPO and must remain a leaf activity — it cannot have child tasks.")
 #                     .format(frappe.bold(doc.subject or doc.name))
 #                 )
 
@@ -69,16 +50,18 @@
 #                 .format(frappe.bold(doc.parent_task))
 #             )
 
-#         if not doc.cpc_uom:
-#             frappe.throw(_("UoM is required on an IRPO."))
+#         if not doc.get("cpc_uom"):
+#             frappe.throw(_("UoM is required on an IRPO activity."))
+        
+#         if not doc.get("account"):
+#             frappe.throw(_("Account is required on an IRPO activity."))
 
-#     elif doc.cpc_node_type == "BOQ Node":
+#     elif node_type == "BOQ Node":
 #         doc.is_group = 1
 #         doc.cpc_is_irpo = 0
 
-#     # cpc_irpo_code should be unique within the project when set (not
-#     # enforced at DB level since BOQ Nodes leave it blank).
-#     if doc.cpc_irpo_code:
+#     # Ensure IRPO code is unique within the project
+#     if doc.get("cpc_irpo_code") and doc.get("project"):
 #         clash = frappe.db.exists(
 #             "Task",
 #             {
@@ -89,31 +72,25 @@
 #         )
 #         if clash:
 #             frappe.throw(
-#                 _("IRPO Code {0} is already used in this project ({1}).")
-#                 .format(frappe.bold(doc.cpc_irpo_code), clash)
+#                 _("IRPO Code {0} is already used in project {1} (Task: {2}).")
+#                 .format(frappe.bold(doc.cpc_irpo_code), frappe.bold(doc.project), clash)
 #             )
 
 
 # # ---------------------------------------------------------------------
-# # Source-line lookup — THE ONE FUNCTION TO CONFIRM/SWAP (see module docstring)
+# # Source-line lookup for BOQ / Sales Order
 # # ---------------------------------------------------------------------
 
 # def get_boq_line_source(sales_order, boq_code):
 #     """
-#     Returns the fields an IRPO/BOQ Node must fetch from "the source line":
-#         {
-#             "project": ...,
-#             "contract": ...,
-#             "boq_code": ...,
-#             "boq_description": ...,
-#             "default_uom": ...,   # optional, used only to prefill the dialog
-#         }
-
-#     Per the real US-04 sales_order.js: cpc_contract lives directly on the
-#     Sales Order (not per item), and item_code on a Sales Order Item row
-#     IS the BOQ code (cpc_boq_code = item_code) — there's no separate
-#     per-item BOQ-code stamp. So boq_code here is matched against
-#     Sales Order Item.item_code.
+#     Returns the fields an IRPO/BOQ Node must fetch from the source line:
+#     {
+#         "project": ...,
+#         "contract": ...,
+#         "boq_code": ...,
+#         "boq_description": ...,
+#         "default_uom": ...,
+#     }
 #     """
 #     so = frappe.db.get_value(
 #         "Sales Order", sales_order, ["project", "cpc_contract"], as_dict=True
@@ -168,9 +145,6 @@
 
 #     node = frappe.new_doc("Task")
 #     node.project = source["project"]
-#     # The BOQ Line (Item Code) IS the parent task's identity — subject
-#     # is the item code itself; the line description goes in the
-#     # description field instead of being folded into the subject.
 #     node.subject = boq_code
 #     node.description = source.get("boq_description")
 #     node.is_group = 1
@@ -183,41 +157,39 @@
 
 
 # # ---------------------------------------------------------------------
-# # Public API: break a BOQ line into IRPOs
+# # Recompute BOQ Budget Fields & Synchronize
 # # ---------------------------------------------------------------------
 
-
-
 # def recompute_boq_budget_fields(contract, boq_code):
-#     """Snapshot the BOQ line's cost budget, what's allocated across all
-#     its IRPOs, and what's left — written onto the BOQ Node AND every
-#     IRPO child under it (single source of truth per BOQ line)."""
-#     cost_budget = frappe.db.get_value(
-#         "Contract BOQ Item",
-#         {"parent": contract, "item_code": boq_code},
-#         "cost_budget",
-#     ) or 0
+#     """
+#     Calculates cost budget, allocated budget, and remaining budget across all IRPOs.
+#     Updates the BOQ Node and every IRPO child under it.
+#     """
+#     cost_budget = 0
+#     if contract and frappe.db.exists("DocType", "Contract BOQ Item"):
+#         cost_budget = frappe.db.get_value(
+#             "Contract BOQ Item",
+#             {"parent": contract, "item_code": boq_code},
+#             "cost_budget",
+#         ) or 0
 
 #     allocated = frappe.db.sql(
 #         """
-#         select coalesce(sum(cpc_budget_amount), 0)
-#         from `tabTask`
-#         where cpc_contract = %s
-#           and cpc_boq_code = %s
-#           and cpc_node_type = 'IRPO'
+#         SELECT COALESCE(SUM(cpc_budget_amount), 0)
+#         FROM `tabTask`
+#         WHERE cpc_contract = %s
+#           AND cpc_boq_code = %s
+#           AND cpc_node_type = 'IRPO'
+#           AND docstatus < 2
 #         """,
 #         (contract, boq_code),
 #     )[0][0]
 
-#     remaining = cost_budget - allocated
+#     remaining = flt(cost_budget) - flt(allocated)
 
-#     # IMPORTANT: frappe.db.set_value with a dict of filters only updates
-#     # the FIRST matching row, not every match — that was the bug. Fetch
-#     # every Task sharing this contract+boq_code (the BOQ Node + all its
-#     # IRPO children) and update each one by name explicitly.
 #     task_names = frappe.get_all(
 #         "Task",
-#         filters={"cpc_contract": contract, "cpc_boq_code": boq_code},
+#         filters={"cpc_contract": contract, "cpc_boq_code": boq_code, "docstatus": ["<", 2]},
 #         pluck="name",
 #     )
 #     for name in task_names:
@@ -235,8 +207,15 @@
 #     return {"cost_budget": cost_budget, "allocated": allocated, "remaining": remaining}
 
 
+# # ---------------------------------------------------------------------
+# # Public API: Break a BOQ line into IRPOs
+# # ---------------------------------------------------------------------
+
 # @frappe.whitelist()
 # def break_into_irpos(sales_order, boq_code, irpos):
+#     """
+#     Batch create and/or update IRPOs under one BOQ line with budget cap enforcement.
+#     """
 #     if isinstance(irpos, str):
 #         irpos = frappe.parse_json(irpos)
 
@@ -246,74 +225,126 @@
 #     source = get_boq_line_source(sales_order, boq_code)
 #     boq_node = get_or_create_boq_node(sales_order, boq_code)
 
-#     # ---- US-07: hard stop if this batch would exceed the BOQ budget ----
-#     cost_budget = frappe.db.get_value(
-#         "Contract BOQ Item",
-#         {"parent": source["contract"], "item_code": boq_code},
-#         "cost_budget",
-#     ) or 0
+#     company = frappe.db.get_value("Project", source["project"], "company")
+#     if not company:
+#         frappe.throw(_("Project {0} has no Company set — cannot create Budget.").format(source["project"]))
 
-#     existing_allocated = frappe.db.sql(
-#         """
-#         select coalesce(sum(cpc_budget_amount), 0)
-#         from `tabTask`
-#         where cpc_contract = %s and cpc_boq_code = %s and cpc_node_type = 'IRPO'
-#         """,
-#         (source["contract"], boq_code),
-#     )[0][0]
+#     updating_names = [row.get("task_name") for row in irpos if row.get("task_name")]
 
-#     new_total = sum(flt(row.get("cpc_budget_amount")) for row in irpos)
-#     projected = existing_allocated + new_total
+#     # Budget cap check
+#     cost_budget = 0
+#     if source.get("contract") and frappe.db.exists("DocType", "Contract BOQ Item"):
+#         cost_budget = frappe.db.get_value(
+#             "Contract BOQ Item",
+#             {"parent": source["contract"], "item_code": boq_code},
+#             "cost_budget",
+#         ) or 0
 
-#     if projected > cost_budget:
-#         frappe.throw(
-#             _("Cannot create these IRPOs: allocating {0} would bring the total to {1}, exceeding this BOQ line's cost budget of {2} by {3}.").format(
-#                 frappe.format_value(new_total, {"fieldtype": "Currency"}),
-#                 frappe.format_value(projected, {"fieldtype": "Currency"}),
-#                 frappe.format_value(cost_budget, {"fieldtype": "Currency"}),
-#                 frappe.format_value(projected - cost_budget, {"fieldtype": "Currency"}),
+#     if cost_budget > 0:
+#         filters_sql = "cpc_contract = %s AND cpc_boq_code = %s AND cpc_node_type = 'IRPO' AND docstatus < 2"
+#         params = [source["contract"], boq_code]
+#         if updating_names:
+#             placeholders = ", ".join(["%s"] * len(updating_names))
+#             filters_sql += f" AND name NOT IN ({placeholders})"
+#             params.extend(updating_names)
+
+#         existing_allocated = frappe.db.sql(
+#             f"SELECT COALESCE(SUM(cpc_budget_amount), 0) FROM `tabTask` WHERE {filters_sql}",
+#             tuple(params),
+#         )[0][0]
+
+#         new_total = sum(flt(row.get("cpc_budget_amount")) for row in irpos)
+#         projected = flt(existing_allocated) + flt(new_total)
+
+#         if projected > cost_budget:
+#             frappe.throw(
+#                 _("Cannot save IRPOs: Projected total {0} exceeds the BOQ line's cost budget of {1} by {2}.").format(
+#                     frappe.format_value(projected, {"fieldtype": "Currency"}),
+#                     frappe.format_value(cost_budget, {"fieldtype": "Currency"}),
+#                     frappe.format_value(projected - cost_budget, {"fieldtype": "Currency"}),
+#                 )
 #             )
-#         )
-#     # ---- end budget check ----
 
 #     created = []
+#     updated = []
+
 #     for row in irpos:
 #         if not row.get("subject"):
 #             frappe.throw(_("Every IRPO needs a Subject."))
 #         if not row.get("cpc_uom"):
 #             frappe.throw(_("Every IRPO needs a UoM."))
+        
+#         if not row.get("account"):
+#             frappe.throw(_("Every IRPO needs an Account."))
 
-#         irpo = frappe.new_doc("Task")
-#         irpo.project = source["project"]
-#         irpo.parent_task = boq_node
-#         irpo.is_group = 0
-#         irpo.subject = row["subject"]
-#         irpo.cpc_node_type = "IRPO"
-#         irpo.cpc_is_irpo = 1
-#         irpo.cpc_sales_order = sales_order
-#         irpo.cpc_contract = source.get("contract")
-#         irpo.cpc_boq_code = boq_code
-#         irpo.cpc_uom = row["cpc_uom"]
-#         irpo.cpc_irpo_code = row.get("cpc_irpo_code")
-#         irpo.exp_start_date = row.get("exp_start_date")
-#         irpo.exp_end_date = row.get("exp_end_date")
-#         irpo.cpc_budget_qty = row.get("cpc_budget_qty")
-#         irpo.cpc_budget_amount = row.get("cpc_budget_amount")
-#         irpo.insert(ignore_permissions=False)
-#         created.append(irpo.name)
+#         task_name = row.get("task_name")
 
-#     # ...unchanged depends_on append block...
+#         if task_name:
+#             irpo = frappe.get_doc("Task", task_name)
+#             if irpo.cpc_node_type != "IRPO" or irpo.cpc_boq_code != boq_code:
+#                 frappe.throw(_("{0} is not an IRPO under BOQ line {1}.").format(task_name, boq_code))
 
-#     if created:
-#         recompute_boq_budget_fields(source["contract"], boq_code)
+#             irpo.subject = row["subject"]
+#             irpo.cpc_uom = row["cpc_uom"]
+#             irpo.cpc_irpo_code = row.get("cpc_irpo_code")
+#             irpo.exp_start_date = row.get("exp_start_date")
+#             irpo.exp_end_date = row.get("exp_end_date")
+#             irpo.cpc_budget_qty = row.get("cpc_budget_qty")
+#             irpo.cpc_budget_amount = row.get("cpc_budget_amount")
+#             irpo.account = row.get("account")
+#             irpo.save(ignore_permissions=False)
+#             updated.append(irpo.name)
+#         else:
+#             irpo = frappe.new_doc("Task")
+#             irpo.project = source["project"]
+#             irpo.parent_task = boq_node
+#             irpo.is_group = 0
+#             irpo.subject = row["subject"]
+#             irpo.cpc_node_type = "IRPO"
+#             irpo.cpc_is_irpo = 1
+#             irpo.cpc_sales_order = sales_order
+#             irpo.cpc_contract = source.get("contract")
+#             irpo.cpc_boq_code = boq_code
+#             irpo.cpc_uom = row["cpc_uom"]
+#             irpo.cpc_irpo_code = row.get("cpc_irpo_code")
+#             irpo.exp_start_date = row.get("exp_start_date")
+#             irpo.exp_end_date = row.get("exp_end_date")
+#             irpo.cpc_budget_qty = row.get("cpc_budget_qty")
+#             irpo.cpc_budget_amount = row.get("cpc_budget_amount")
+#             irpo.account = row.get("account")
+#             irpo.insert(ignore_permissions=False)
+#             created.append(irpo.name)
+#         sync_budget_for_irpo(irpo.name, irpo.account, flt(irpo.cpc_budget_amount), company)
+#     # Sync BOQ Node depends_on grid
+#     if created or updated:
+#         try:
+#             node_doc = frappe.get_doc("Task", boq_node)
+#             existing_dep_tasks = {dep.task for dep in node_doc.get("depends_on", [])}
+#             touched = False
 
-#     return {"boq_node": boq_node, "irpos": created}
+#             for task_id in created:
+#                 if task_id not in existing_dep_tasks:
+#                     node_doc.append("depends_on", {"task": task_id})
+#                     touched = True
 
+#             if touched:
+#                 node_doc.save(ignore_permissions=False)
+#         except Exception:
+#             pass
+
+#         if source.get("contract"):
+#             recompute_boq_budget_fields(source["contract"], boq_code)
+
+#     return {"boq_node": boq_node, "created": created, "updated": updated}
+
+
+# # ---------------------------------------------------------------------
+# # Helper APIs for Dialogs & Views
+# # ---------------------------------------------------------------------
 
 # @frappe.whitelist()
 # def get_boq_lines_for_sales_order(sales_order):
-#     """Helper for the dialog: list BOQ codes (= item_code) available on
-#     this Sales Order, for the picker."""
+#     """List BOQ codes available on a Sales Order"""
 #     so = frappe.get_doc("Sales Order", sales_order)
 #     seen = {}
 #     for item in so.items:
@@ -323,43 +354,41 @@
 #     return [{"boq_code": k, "description": v} for k, v in seen.items()]
 
 
-
 # @frappe.whitelist()
 # def get_boq_budget_summary(sales_order, boq_code):
-#     """Called when the user picks a BOQ Line in the dialog — returns
-#     the parent BOQ line's cost budget, what's already allocated to
-#     existing IRPOs under it, and what's left."""
+#     """Returns cost budget, allocated budget, remaining budget, and IRPO count for a BOQ line"""
 #     source = get_boq_line_source(sales_order, boq_code)
+#     cost_budget = 0
+#     if source.get("contract") and frappe.db.exists("DocType", "Contract BOQ Item"):
+#         cost_budget = frappe.db.get_value(
+#             "Contract BOQ Item",
+#             {"parent": source["contract"], "item_code": boq_code},
+#             "cost_budget",
+#         ) or 0
 
-#     cost_budget = frappe.db.get_value(
-#         "Contract BOQ Item",
-#         {"parent": source["contract"], "item_code": boq_code},
-#         "cost_budget",
-#     ) or 0
-
-#     allocated = frappe.db.sql(
+#     irpo_count, allocated = frappe.db.sql(
 #         """
-#         select coalesce(sum(cpc_budget_amount), 0)
-#         from `tabTask`
-#         where cpc_contract = %s
-#           and cpc_boq_code = %s
-#           and cpc_node_type = 'IRPO'
+#         SELECT COUNT(*), COALESCE(SUM(cpc_budget_amount), 0)
+#         FROM `tabTask`
+#         WHERE cpc_contract = %s
+#           AND cpc_boq_code = %s
+#           AND cpc_node_type = 'IRPO'
+#           AND docstatus < 2
 #         """,
 #         (source["contract"], boq_code),
-#     )[0][0]
+#     )[0]
 
 #     return {
 #         "cost_budget": cost_budget,
 #         "allocated": allocated,
-#         "remaining": cost_budget - allocated,
+#         "remaining": flt(cost_budget) - flt(allocated),
+#         "irpo_count": irpo_count,
 #     }
-
 
 
 # @frappe.whitelist()
 # def get_boq_summary_for_sales_order(sales_order):
-#     """Powers the summary table at the top of the dialog: every BOQ
-#     line on this SO, its IRPO count, and remaining budget."""
+#     """Summary table of all BOQ lines on a Sales Order"""
 #     so = frappe.get_doc("Sales Order", sales_order)
 #     contract = so.cpc_contract
 #     seen = {}
@@ -370,31 +399,35 @@
 
 #     rows = []
 #     for boq_code, description in seen.items():
-#         cost_budget = frappe.db.get_value(
-#             "Contract BOQ Item",
-#             {"parent": contract, "item_code": boq_code},
-#             "cost_budget",
-#         ) or 0
+#         cost_budget = 0
+#         if contract and frappe.db.exists("DocType", "Contract BOQ Item"):
+#             cost_budget = frappe.db.get_value(
+#                 "Contract BOQ Item",
+#                 {"parent": contract, "item_code": boq_code},
+#                 "cost_budget",
+#             ) or 0
+
 #         irpo_count, allocated = frappe.db.sql(
 #             """
-#             select count(*), coalesce(sum(cpc_budget_amount), 0)
-#             from `tabTask`
-#             where cpc_contract = %s and cpc_boq_code = %s and cpc_node_type = 'IRPO'
+#             SELECT COUNT(*), COALESCE(SUM(cpc_budget_amount), 0)
+#             FROM `tabTask`
+#             WHERE cpc_contract = %s AND cpc_boq_code = %s AND cpc_node_type = 'IRPO' AND docstatus < 2
 #             """,
 #             (contract, boq_code),
 #         )[0]
+
 #         rows.append({
 #             "boq_code": boq_code,
 #             "description": description,
 #             "irpo_count": irpo_count,
-#             "remaining": cost_budget - flt(allocated),
+#             "remaining": flt(cost_budget) - flt(allocated),
 #         })
 #     return rows
 
 
 # @frappe.whitelist()
 # def get_irpos_for_boq_line(sales_order, boq_code):
-#     """Powers the 'View' popup: existing IRPOs under one BOQ line."""
+#     """Returns existing IRPOs under one BOQ line"""
 #     source = get_boq_line_source(sales_order, boq_code)
 #     return frappe.get_all(
 #         "Task",
@@ -402,174 +435,691 @@
 #             "cpc_contract": source["contract"],
 #             "cpc_boq_code": boq_code,
 #             "cpc_node_type": "IRPO",
+#             "docstatus": ["<", 2],
 #         },
-#         fields=["subject", "cpc_uom", "cpc_budget_qty", "cpc_budget_amount",
-#                 "exp_start_date", "exp_end_date"],
+#         fields=["name", "subject", "cpc_uom", "cpc_budget_qty", "cpc_budget_amount","account",
+#                 "exp_start_date", "exp_end_date", "cpc_irpo_code", "status", "progress"],
 #         order_by="creation asc",
 #     )
 
 
+# # ---------------------------------------------------------------------
+# # File Upload / Import Parser for IRPOs
+# # ---------------------------------------------------------------------
 
-
-
-
-
-
-# import os
-# import datetime as dt
-# from io import BytesIO
-
-# import frappe
-# from frappe import _
-# from frappe.utils.csvutils import read_csv_content
-
-# XLSX_MAGIC = b"PK\x03\x04"                       # xlsx is a zip archive
-# XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"   # legacy OLE binary format
-
-# # IRPO_COLUMNS order (client-side): subject(0), cpc_uom(1),
-# # exp_start_date(2), exp_end_date(3), cpc_budget_qty(4), cpc_budget_amount(5)
+# XLSX_MAGIC = b"PK\x03\x04"
+# XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 # DATE_COLUMN_INDICES = {2, 3}
 
 
 # def _normalize_date(value):
-# 	"""
-# 	Coerce a cell into an ISO YYYY-MM-DD string, which is what
-# 	Frappe's Date field expects internally.
-
-# 	Handles two cases:
-# 	- A real datetime.date/datetime object (openpyxl returns these
-# 	  when the source cell is a genuine Excel date, not text).
-# 	- A DD-MM-YYYY text string (what our template actually uses, per
-# 	  the uploaded sample — e.g. "25-08-2026"). Explicit strptime
-# 	  rather than frappe.utils.getdate(), since getdate()'s
-# 	  interpretation of an ambiguous string depends on System
-# 	  Settings' date format and isn't guaranteed to match the
-# 	  template's DD-MM-YYYY convention.
-# 	"""
-# 	if value in (None, ""):
-# 		return ""
-# 	if isinstance(value, dt.datetime):
-# 		return value.date().isoformat()
-# 	if isinstance(value, dt.date):
-# 		return value.isoformat()
-# 	try:
-# 		return dt.datetime.strptime(str(value).strip(), "%d-%m-%Y").date().isoformat()
-# 	except ValueError:
-# 		# Not a recognizable date — leave as-is so it's visible in the
-# 		# grid and the user gets a clear validation error on submit,
-# 		# rather than silently dropping or guessing at their data.
-# 		return str(value).strip()
+#     if value in (None, ""):
+#         return ""
+#     if isinstance(value, dt.datetime):
+#         return value.date().isoformat()
+#     if isinstance(value, dt.date):
+#         return value.isoformat()
+#     try:
+#         return dt.datetime.strptime(str(value).strip(), "%d-%m-%Y").date().isoformat()
+#     except ValueError:
+#         return str(value).strip()
 
 
 # def _cell_to_str(cell):
-# 	if cell is None:
-# 		return ""
-# 	if isinstance(cell, dt.datetime):
-# 		return cell.date().isoformat()
-# 	if isinstance(cell, dt.date):
-# 		return cell.isoformat()
-# 	return str(cell)
+#     if cell is None:
+#         return ""
+#     if isinstance(cell, dt.datetime):
+#         return cell.date().isoformat()
+#     if isinstance(cell, dt.date):
+#         return cell.isoformat()
+#     return str(cell)
 
 
 # def _row_to_str_list(row):
-# 	out = []
-# 	for idx, cell in enumerate(row):
-# 		if idx in DATE_COLUMN_INDICES:
-# 			out.append(_normalize_date(cell))
-# 		else:
-# 			out.append(_cell_to_str(cell))
-# 	return out
+#     out = []
+#     for idx, cell in enumerate(row):
+#         if idx in DATE_COLUMN_INDICES:
+#             out.append(_normalize_date(cell))
+#         else:
+#             out.append(_cell_to_str(cell))
+#     return out
 
 
 # @frappe.whitelist()
 # def parse_uploaded_irpo_file(file_url):
-# 	"""
-# 	Parse an uploaded CSV/XLSX file for the "Break into IRPOs" dialog
-# 	and return it as a plain list of row-arrays, with the two date
-# 	columns (Planned Start / Planned End) normalized to ISO
-# 	YYYY-MM-DD so Frappe's Date field renders them correctly.
+#     file_doc = frappe.get_doc("File", {"file_url": file_url})
+#     content = file_doc.get_content()
+#     if isinstance(content, str):
+#         content = content.encode("utf-8")
 
-# 	Format is detected by sniffing the file's magic bytes rather than
-# 	trusting the filename/extension.
+#     if content.startswith(XLSX_MAGIC):
+#         import openpyxl
 
-# 	.xlsx is read directly with openpyxl (a hard dependency of every
-# 	Frappe/ERPNext bench) rather than frappe.utils.xlsxutils, whose
-# 	kwargs have changed across Frappe versions.
+#         workbook = openpyxl.load_workbook(BytesIO(content), data_only=True, read_only=True)
+#         sheet = workbook.worksheets[0]
+#         rows = [list(row) for row in sheet.iter_rows(values_only=True)]
+#         workbook.close()
 
-# 	Legacy .xls (pre-2007 binary format) is explicitly rejected with a
-# 	clear message — openpyxl can't read it.
-# 	"""
-# 	file_doc = frappe.get_doc("File", {"file_url": file_url})
-# 	content = file_doc.get_content()
-# 	if isinstance(content, str):
-# 		content = content.encode("utf-8")
+#     elif content.startswith(XLS_MAGIC):
+#         frappe.throw(_(
+#             "Legacy .xls files are not supported. Please save as .xlsx in Excel and re-upload."
+#         ))
+#     else:
+#         text = content.decode("utf-8-sig", errors="replace")
+#         rows = read_csv_content(text)
 
-# 	if content.startswith(XLSX_MAGIC):
-# 		import openpyxl
-
-# 		workbook = openpyxl.load_workbook(BytesIO(content), data_only=True, read_only=True)
-# 		sheet = workbook.worksheets[0]
-# 		rows = [list(row) for row in sheet.iter_rows(values_only=True)]
-# 		workbook.close()
-
-# 	elif content.startswith(XLS_MAGIC):
-# 		frappe.throw(_(
-# 			"This looks like a legacy .xls file (Excel 97-2003 format), which isn't "
-# 			"supported. Please open it in Excel and use \"Save As\" \u2192 .xlsx, then "
-# 			"upload again."
-# 		))
-
-# 	else:
-# 		text = content.decode("utf-8-sig", errors="replace")
-# 		rows = read_csv_content(text)
-
-# 	return [_row_to_str_list(row) for row in (rows or [])]
+#     return [_row_to_str_list(row) for row in (rows or [])]
 
 
 
 
+# def sync_budget_for_irpo(task_name, account, budget_amount, company):
+#     """Create the Budget when the IRPO is first created; keep it in
+#     sync on edits (e.g. via Get Previous IRPO) as long as it's still
+#     Draft. Never touches a Budget that's already been submitted."""
+#     fiscal_year = get_fiscal_year(nowdate(), company=company)[0]
+#     existing_name = frappe.db.exists("Budget", {"budget_against": "Task", "task": task_name})
+
+#     if existing_name:
+#         budget = frappe.get_doc("Budget", existing_name)
+#         if budget.docstatus != 0:
+#             frappe.msgprint(
+#                 _("Budget {0} against this IRPO is already submitted — account/amount changes were not applied automatically.").format(budget.name),
+#                 alert=True, indicator="orange",
+#             )
+#             return budget.name
+
+#         if budget.accounts:
+#             budget.accounts[0].account = account
+#             budget.accounts[0].budget_amount = budget_amount
+#         else:
+#             budget.append("accounts", {"account": account, "budget_amount": budget_amount})
+#         budget.company = company
+#         budget.fiscal_year = fiscal_year
+#         budget.save(ignore_permissions=True)
+#         return budget.name
+
+#     budget = frappe.new_doc("Budget")
+#     budget.budget_against = "Task"
+#     budget.task = task_name
+#     budget.company = company
+#     budget.fiscal_year = fiscal_year
+
+#     budget.applicable_on_material_request = 1
+#     budget.action_if_annual_budget_exceeded_on_mr = "Warn"
+#     budget.action_if_accumulated_monthly_budget_exceeded_on_mr = "Warn"
+
+#     budget.applicable_on_purchase_order = 1
+#     budget.applicable_on_booking_actual_expenses = 1
+#     budget.action_if_annual_budget_exceeded = "Warn"
+#     budget.action_if_accumulated_monthly_budget_exceeded = "Warn"
+
+#     budget.append("accounts", {"account": account, "budget_amount": budget_amount})
+#     budget.insert(ignore_permissions=True)
+#     # .insert() only — docstatus stays 0 (Draft), never auto-submitted.
+#     return budget.name
+
+
+# # ---------------------------------------------------------------------
+# # Create BOQ Node Tasks for a submitted Construction Contract
+# # ---------------------------------------------------------------------
+
+# @frappe.whitelist()
+# def create_boq_nodes_for_contract(contract_name):
+#     """Create a BOQ Node Task for every BOQ line of the given Construction Contract.
+
+#     Called from the Contract Center planner after "Save Contract + Project"
+#     so the new contract's BOQ items appear immediately as Group RPO rows.
+#     Idempotent — existing BOQ Nodes for the same contract + boq_code are left intact.
+
+#     Returns a list of created (or already-existing) Task names.
+#     """
+#     contract = frappe.get_doc("Construction Contract", contract_name)
+#     if not contract.boq_items:
+#         return []
+
+#     created = []
+#     for item in contract.boq_items:
+#         boq_code = item.get("boq_code") or item.get("item_code")
+#         if not boq_code:
+#             continue
+
+#         # Idempotent: skip if a BOQ Node already exists for this contract + boq_code.
+#         existing = frappe.db.get_value(
+#             "Task",
+#             {"cpc_contract": contract_name, "cpc_boq_code": boq_code, "cpc_node_type": "BOQ Node"},
+#             "name",
+#         )
+#         if existing:
+#             created.append(existing)
+#             continue
+
+#         node = frappe.new_doc("Task")
+#         node.subject = boq_code
+#         node.description = item.get("description") or ""
+#         node.is_group = 1
+#         node.cpc_node_type = "BOQ Node"
+#         node.cpc_contract = contract_name
+#         node.cpc_boq_code = boq_code
+#         node.cpc_boq_cost_budget = flt(item.get("cost_budget") or item.get("amount") or 0)
+#         # project may be set later when a Sales Order is created; leave blank for now.
+#         node.insert(ignore_permissions=True)
+#         created.append(node.name)
+
+#     frappe.db.commit()
+#     return created
+
+
+# # ---------------------------------------------------------------------
+# # IRPO Task Detail Viewer — data & save APIs
+# # ---------------------------------------------------------------------
+
+# @frappe.whitelist()
+# def get_irpo_task_detail(task_name):
+#     """Return all data needed to populate the IRPO Task Detail Viewer dialog.
+
+#     Tabs covered:
+#       1. Overview & General  – core task fields + parent BOQ info
+#       2. Dual Budget          – budget amounts + parent BOQ remaining
+#       3. Resource Allocations – timesheet-based resource rows
+#       4. Progress & History   – IRPO Quantity Ledger history
+#     """
+#     task = frappe.get_doc("Task", task_name)
+
+#     # Parent BOQ node label
+#     parent_task_subject = None
+#     parent_boq_remaining = None
+#     if task.parent_task:
+#         parent_task_subject = frappe.db.get_value("Task", task.parent_task, "subject")
+#         parent_boq_remaining = frappe.db.get_value(
+#             "Task", task.parent_task, "cpc_boq_budget_remaining"
+#         )
+
+#     # Project name (full)
+#     project_name = None
+#     if task.project:
+#         project_name = frappe.db.get_value("Project", task.project, "project_name") or task.project
+
+#     # Predecessor tasks
+#     depends_on_tasks = ", ".join(
+#         frappe.db.get_all(
+#             "Task Depends On",
+#             filters={"parent": task_name},
+#             fields=["task"],
+#             pluck="task",
+#         )
+#     )
+
+#     # --- Resource Allocations: Timesheet Details linked to this task ---
+#     resources = []
+#     try:
+#         ts_rows = frappe.db.sql(
+#             """
+#             SELECT
+#                 tsd.employee,
+#                 tsd.employee_name,
+#                 SUM(tsd.hours) AS hours,
+#                 AVG(tsd.billing_rate) AS rate,
+#                 SUM(tsd.billing_amount) AS total_cost
+#             FROM `tabTimesheet Detail` tsd
+#             INNER JOIN `tabTimesheet` ts ON ts.name = tsd.parent
+#             WHERE tsd.task = %s AND ts.docstatus < 2
+#             GROUP BY tsd.employee, tsd.employee_name
+#             """,
+#             task_name,
+#             as_dict=True,
+#         )
+#         for r in ts_rows:
+#             resources.append({
+#                 "employee": r.employee,
+#                 "employee_name": r.employee_name or r.employee,
+#                 "resource_type": "Labour",
+#                 "hours": flt(r.hours),
+#                 "rate": flt(r.rate),
+#                 "total_cost": flt(r.total_cost),
+#             })
+#     except Exception:
+#         pass  # Timesheet may not exist; silently return empty
+
+#     # --- Progress & History: IRPO Quantity Ledger ---
+#     progress_history = []
+#     try:
+#         ledger_rows = frappe.db.get_all(
+#             "IRPO Quantity Ledger",
+#             filters={"irpo": task_name, "is_cancelled": 0},
+#             fields=["posting_date", "qty AS period_pct", "voucher_no", "stage", "docstatus"],
+#             order_by="posting_date asc, creation asc",
+#         )
+#         cumulative = 0.0
+#         for row in ledger_rows:
+#             period = flt(row.get("period_pct") or 0)
+#             cumulative += period
+#             progress_history.append({
+#                 "posting_date": str(row.posting_date) if row.posting_date else "",
+#                 "period_pct": period,
+#                 "cumulative_pct": cumulative,
+#                 "earned_value": period * flt(task.cpc_budget_amount) / 100
+#                     if task.cpc_uom in ("Percent", "%") else period,
+#                 "voucher_no": row.voucher_no,
+#                 "docstatus": row.docstatus,
+#             })
+#     except Exception:
+#         pass
+
+#     return {
+#         # Core fields
+#         "name": task.name,
+#         "subject": task.subject,
+#         "status": task.status,
+#         "project": task.project,
+#         "project_name": project_name,
+#         "parent_task": task.parent_task,
+#         "parent_task_subject": parent_task_subject,
+#         # Custom CPC fields
+#         "cpc_contract": task.cpc_contract,
+#         "cpc_sales_order": task.cpc_sales_order,
+#         "cpc_boq_code": task.cpc_boq_code,
+#         "cpc_irpo_code": task.cpc_irpo_code,
+#         "cpc_uom": task.cpc_uom,
+#         "cpc_budget_qty": flt(task.cpc_budget_qty),
+#         "cpc_budget_amount": flt(task.cpc_budget_amount),
+#         # Schedule
+#         "exp_start_date": str(task.exp_start_date) if task.exp_start_date else None,
+#         "exp_end_date": str(task.exp_end_date) if task.exp_end_date else None,
+#         "depends_on_tasks": depends_on_tasks,
+#         # Progress
+#         "progress": flt(task.progress or 0),
+#         # Budget
+#         "parent_boq_remaining": flt(parent_boq_remaining) if parent_boq_remaining is not None else None,
+#         # Related data
+#         "resources": resources,
+#         "progress_history": progress_history,
+#     }
+
+
+# @frappe.whitelist()
+# def save_irpo_task_fields(task_name, fields_json):
+#     """Patch a subset of editable fields on a Task from the IRPO viewer.
+
+#     ``fields_json`` — JSON dict with field-name → value pairs.
+#     Only whitelisted fields are updated (others are silently ignored).
+#     """
+#     if isinstance(fields_json, str):
+#         fields_json = frappe.parse_json(fields_json)
+
+#     ALLOWED = {
+#         "subject", "project", "cpc_sales_order",
+#         "exp_start_date", "exp_end_date",
+#         "cpc_budget_qty", "cpc_budget_amount",
+#     }
+
+#     updates = {k: v for k, v in fields_json.items() if k in ALLOWED}
+#     if not updates:
+#         return {"updated": 0}
+
+#     frappe.db.set_value("Task", task_name, updates, update_modified=True)
+#     frappe.db.commit()
+#     return {"updated": len(updates)}
+
+
+# # ---------------------------------------------------------------------
+# # Break IRPO — create Leaf IRPO Tasks under a BOQ Node
+# # ---------------------------------------------------------------------
+
+# @frappe.whitelist()
+# def break_into_leaf_irpos(boq_node_name, irpos_json):
+#     """Create Leaf IRPO Tasks under the given BOQ Node Task.
+
+#     ``boq_node_name`` — name of the BOQ Node Task (Group RPO row in the planner).
+#     ``irpos_json``    — JSON list of row dicts with keys:
+#         subject, cpc_uom, exp_start_date, exp_end_date,
+#         account, cpc_budget_qty, cpc_budget_amount
+
+#     Returns list of created Task names.
+#     """
+#     if isinstance(irpos_json, str):
+#         irpos_json = frappe.parse_json(irpos_json)
+
+#     if not irpos_json:
+#         frappe.throw(_("Add at least one IRPO row."))
+
+#     boq_node = frappe.get_doc("Task", boq_node_name)
+#     if not boq_node:
+#         frappe.throw(_("BOQ Node {0} not found.").format(boq_node_name))
+
+#     created = []
+#     for row in irpos_json:
+#         if not row.get("subject"):
+#             frappe.throw(_("Every IRPO row needs a Subject."))
+
+#         irpo = frappe.new_doc("Task")
+#         irpo.subject = row["subject"]
+#         irpo.parent_task = boq_node_name
+#         irpo.project = boq_node.project or None
+#         irpo.is_group = 0
+#         irpo.cpc_node_type = "IRPO"
+#         irpo.cpc_is_irpo = 1
+#         irpo.cpc_contract = boq_node.cpc_contract
+#         irpo.cpc_sales_order = boq_node.cpc_sales_order or None
+#         irpo.cpc_boq_code = boq_node.cpc_boq_code
+#         irpo.cpc_uom = row.get("cpc_uom") or "Percent"
+#         irpo.exp_start_date = row.get("exp_start_date") or None
+#         irpo.exp_end_date = row.get("exp_end_date") or None
+#         irpo.cpc_budget_qty = flt(row.get("cpc_budget_qty") or 0)
+#         irpo.cpc_budget_amount = flt(row.get("cpc_budget_amount") or 0)
+#         irpo.account = row.get("account") or None
+#         irpo.insert(ignore_permissions=True)
+
+#         created.append(irpo.name)
+
+#     frappe.db.commit()
+
+#     # Sync stored budget fields on the BOQ Node and all sibling IRPOs so the
+#     # planner's "Remaining" column (read from cpc_boq_budget_remaining) reflects
+#     # the newly allocated amounts straight away.
+#     if boq_node.cpc_contract and boq_node.cpc_boq_code:
+#         recompute_boq_budget_fields(boq_node.cpc_contract, boq_node.cpc_boq_code)
+
+#     return created
+
+
+# # ---------------------------------------------------------------------
+# # IRPO Planner — data API
+# # ---------------------------------------------------------------------
+
+# @frappe.whitelist()
+# @frappe.whitelist()
+# def get_planner_filters(cpc_contract=None):
+#     """Return the master-data values used to populate the planner dropdowns.
+
+#     Contract / Project / Sales Order options are sourced from Construction
+#     Contract and Sales Order records (not from Task rows), because Task rows
+#     do not always carry ``project`` / ``cpc_sales_order`` populated.
+
+#     When ``cpc_contract`` is given the Project and Sales Order options are
+#     scoped to that contract, so the planner only offers related records.
+#     """
+#     contracts = frappe.get_all(
+#         "Construction Contract",
+#         fields=["name", "project"],
+#         order_by="name desc",
+#     )
+
+#     if cpc_contract:
+#         contract_project = frappe.get_value("Construction Contract", cpc_contract, "project")
+#         sales_orders = frappe.get_all(
+#             "Sales Order",
+#             filters={"docstatus": ["<", 2], "cpc_contract": cpc_contract},
+#             fields=["name", "project", "cpc_contract"],
+#             order_by="name desc",
+#         )
+#         projects = []
+#         if contract_project:
+#             projects.append(contract_project)
+#         for so in sales_orders:
+#             if so.project and so.project not in projects:
+#                 projects.append(so.project)
+#         return {
+#             "contracts": [c.name for c in contracts],
+#             "projects": projects,
+#             "sales_orders": [
+#                 {
+#                     "name": so.name,
+#                     "project": so.project,
+#                     "cpc_contract": so.cpc_contract,
+#                 }
+#                 for so in sales_orders
+#             ],
+#         }
+
+#     sales_orders = frappe.get_all(
+#         "Sales Order",
+#         filters={"docstatus": ["<", 2], "cpc_contract": ["is", "set"]},
+#         fields=["name", "project", "cpc_contract"],
+#         order_by="name desc",
+#     )
+#     projects = []
+#     seen_projects = set()
+#     for c in contracts:
+#         if c.project and c.project not in seen_projects:
+#             seen_projects.add(c.project)
+#             projects.append(c.project)
+#     for so in sales_orders:
+#         if so.project and so.project not in seen_projects:
+#             seen_projects.add(so.project)
+#             projects.append(so.project)
+
+#     return {
+#         "contracts": [c.name for c in contracts],
+#         "projects": projects,
+#         "sales_orders": [
+#             {
+#                 "name": so.name,
+#                 "project": so.project,
+#                 "cpc_contract": so.cpc_contract,
+#             }
+#             for so in sales_orders
+#         ],
+#     }
+
+
+# @frappe.whitelist()
+# def get_planner_data(cpc_contract=None, project=None, sales_order=None):
+#     """Return a flat list of all BOQ Nodes and IRPOs for the planner UI.
+
+#     Each row contains the fields needed to render both the WBS tree table and
+#     the Schedule Timeline (Gantt) panel.  Predecessor task names are returned
+#     as a comma-joined string so the JS can parse them without extra round-trips.
+
+#     Filters are resolved through master data because Task rows do not reliably
+#     carry ``project`` or ``cpc_sales_order``: Sales Orders map to a contract
+#     (and a project), Construction Contracts map to a project.
+#     """
+#     filters = {"docstatus": ["<", 2], "cpc_contract": ["is", "set"]}
+#     if cpc_contract:
+#         # A sales order wins over a project; both give a concrete contract.
+#         contract = cpc_contract
+#         if sales_order:
+#             so_contract = frappe.get_value("Sales Order", sales_order, "cpc_contract")
+#             if so_contract:
+#                 contract = so_contract
+#         filters["cpc_contract"] = contract
+#     elif sales_order:
+#         so_contract = frappe.get_value("Sales Order", sales_order, "cpc_contract")
+#         if so_contract:
+#             filters["cpc_contract"] = so_contract
+#         else:
+#             filters["cpc_contract"] = ["is", "set"]
+#             filters["cpc_sales_order"] = sales_order
+#     elif project:
+#         contracts = frappe.get_all(
+#             "Construction Contract",
+#             filters={"project": project},
+#             pluck="name",
+#         )
+#         if contracts:
+#             filters["cpc_contract"] = ["in", contracts]
+#         else:
+#             filters["cpc_contract"] = ["is", "set"]
+#             filters["project"] = project
+
+#     tasks = frappe.get_all(
+#         "Task",
+#         filters=filters,
+#         fields=[
+#             "name",
+#             "subject",
+#             "project",
+#             "cpc_node_type",
+#             "parent_task",
+#             "is_group",
+#             "cpc_uom",
+#             "cpc_budget_qty",
+#             "cpc_budget_amount",
+#             "cpc_boq_cost_budget",
+#             "cpc_boq_budget_allocated",
+#             "cpc_boq_budget_remaining",
+#             "progress",
+#             "exp_start_date",
+#             "exp_end_date",
+#             "cpc_sales_order",
+#             "cpc_contract",
+#             "cpc_boq_code",
+#             "cpc_irpo_code",
+#             "status",
+#         ],
+#         order_by="cpc_node_type asc, creation asc",
+#     )
+
+#     if not tasks:
+#         return []
+
+#     # Fetch predecessor links for all tasks in one query
+#     task_names = [t.name for t in tasks]
+#     placeholders = ", ".join(["%s"] * len(task_names))
+#     deps_rows = frappe.db.sql(
+#         f"""
+#         SELECT parent, task AS predecessor
+#         FROM `tabTask Depends On`
+#         WHERE parent IN ({placeholders})
+#         """,
+#         tuple(task_names),
+#         as_dict=True,
+#     )
+#     deps_map = {}
+#     for dep in deps_rows:
+#         deps_map.setdefault(dep.parent, []).append(dep.predecessor)
+
+#     result = []
+#     for task in tasks:
+#         row = task.copy() if isinstance(task, dict) else dict(task)
+#         row["depends_on_tasks"] = ", ".join(deps_map.get(task.name, []))
+#         # Compute consumed percentage from progress field (0–100)
+#         row["consumed_pct"] = flt(task.progress or 0)
+#         result.append(row)
+
+#     # ----------------------------------------------------------------
+#     # Live-recompute budget figures for BOQ Node rows.
+#     # The stored cpc_boq_budget_remaining / cpc_boq_budget_allocated
+#     # fields can be stale (e.g. IRPOs created via the planner's
+#     # break_into_leaf_irpos before this fix, or via the SO dialog when
+#     # recompute was skipped). Fetching the live sum in one query and
+#     # patching the rows here means the planner always shows accurate
+#     # "Remaining" values without a separate API call.
+#     # ----------------------------------------------------------------
+#     boq_nodes = [r for r in result if r.get("cpc_node_type") == "BOQ Node"]
+#     if boq_nodes:
+#         # Build a (contract, boq_code) → allocated map from one SQL pass.
+#         contract_boq_pairs = list({
+#             (r["cpc_contract"], r["cpc_boq_code"])
+#             for r in boq_nodes
+#             if r.get("cpc_contract") and r.get("cpc_boq_code")
+#         })
+#         if contract_boq_pairs:
+#             pair_placeholders = ", ".join(["(%s, %s)"] * len(contract_boq_pairs))
+#             flat_params = [v for pair in contract_boq_pairs for v in pair]
+#             allocated_rows = frappe.db.sql(
+#                 f"""
+#                 SELECT cpc_contract, cpc_boq_code, COALESCE(SUM(cpc_budget_amount), 0) AS allocated
+#                 FROM `tabTask`
+#                 WHERE (cpc_contract, cpc_boq_code) IN ({pair_placeholders})
+#                   AND cpc_node_type = 'IRPO'
+#                   AND docstatus < 2
+#                 GROUP BY cpc_contract, cpc_boq_code
+#                 """,
+#                 tuple(flat_params),
+#                 as_dict=True,
+#             )
+#             allocated_map = {
+#                 (r.cpc_contract, r.cpc_boq_code): flt(r.allocated)
+#                 for r in allocated_rows
+#             }
+#             for row in boq_nodes:
+#                 key = (row.get("cpc_contract"), row.get("cpc_boq_code"))
+#                 live_allocated = allocated_map.get(key, 0.0)
+#                 budget = flt(row.get("cpc_boq_cost_budget") or 0)
+#                 row["cpc_boq_budget_allocated"] = live_allocated
+#                 row["cpc_boq_budget_remaining"] = budget - live_allocated
+
+#     return result
+
+
+# @frappe.whitelist()
+# def save_planner_dates(tasks_json):
+#     """Batch-update exp_start_date (and exp_end_date) on Task records.
+
+#     ``tasks_json`` is a JSON-serialised list of objects:
+#       [{"name": "TASK-0001", "exp_start_date": "2026-09-20", "exp_end_date": "2026-10-05"}, ...]
+#     """
+#     if isinstance(tasks_json, str):
+#         tasks_json = frappe.parse_json(tasks_json)
+
+#     if not tasks_json:
+#         return {"updated": 0}
+
+#     updated = 0
+#     for row in tasks_json:
+#         name = row.get("name")
+#         if not name:
+#             continue
+#         frappe.db.set_value(
+#             "Task",
+#             name,
+#             {
+#                 "exp_start_date": row.get("exp_start_date") or None,
+#                 "exp_end_date": row.get("exp_end_date") or None,
+#             },
+#             update_modified=False,
+#         )
+#         updated += 1
+
+#     frappe.db.commit()
+#     return {"updated": updated}
 
 
 
 
 
-
-
-
-
-
-
-
-
+import os
+import datetime as dt
+from io import BytesIO
 
 import frappe
 from frappe import _
-from frappe.utils import flt
-from frappe.utils.nestedset import NestedSet  # noqa: F401  (Task is a NestedSet; kept for reference)
-
-
+from frappe.utils import flt, getdate
+from frappe.utils.csvutils import read_csv_content
+from frappe.utils import flt, getdate, nowdate
+from erpnext.accounts.utils import get_fiscal_year
+from cpc_construction_management.cpc_construction_management.budget.irpo_budget_revision import (
+    process_budget_qty_revisions,
+)
 # ---------------------------------------------------------------------
-# Validation: enforce the "IRPO is always a leaf" rule
+# Validation Hook: Enforce the "IRPO is always a leaf" rule
 # ---------------------------------------------------------------------
 
 def validate_irpo_task(doc, method=None):
-    """doc_events hook on Task.validate"""
-
-    if not doc.get("cpc_node_type"):
+    """
+    doc_events hook on Task.validate
+    Enforces:
+      - BOQ Node: is_group = 1, cpc_is_irpo = 0
+      - IRPO: is_group = 0, cpc_is_irpo = 1, must have BOQ Node as parent, UOM required
+      - Unique IRPO code per project
+    """
+    node_type = doc.get("cpc_node_type")
+    if not node_type:
         return
 
-    if doc.cpc_node_type == "IRPO":
-        # An IRPO is always a leaf.
+    if node_type == "IRPO":
+        # An IRPO is always a leaf activity
         doc.is_group = 0
         doc.cpc_is_irpo = 1
 
-        # It cannot have children. On an existing doc, check the DB;
-        # on a new doc this is moot (nothing can point at it yet).
+        # Check existing children in DB
         if not doc.is_new():
             has_children = frappe.db.exists("Task", {"parent_task": doc.name})
             if has_children:
                 frappe.throw(
-                    _("{0} is an IRPO and must stay a leaf activity — it cannot have child tasks.")
+                    _("{0} is an IRPO and must remain a leaf activity — it cannot have child tasks.")
                     .format(frappe.bold(doc.subject or doc.name))
                 )
 
@@ -583,16 +1133,21 @@ def validate_irpo_task(doc, method=None):
                 .format(frappe.bold(doc.parent_task))
             )
 
-        if not doc.cpc_uom:
-            frappe.throw(_("UoM is required on an IRPO."))
+        if not doc.get("cpc_uom"):
+            frappe.throw(_("UoM is required on an IRPO activity."))
 
-    elif doc.cpc_node_type == "BOQ Node":
+        if not doc.get("account"):
+            frappe.throw(_("Account is required on an IRPO activity."))
+
+        _recalculate_available_qty(doc)
+        process_budget_qty_revisions(doc)   
+
+    elif node_type == "BOQ Node":
         doc.is_group = 1
         doc.cpc_is_irpo = 0
 
-    # cpc_irpo_code should be unique within the project when set (not
-    # enforced at DB level since BOQ Nodes leave it blank).
-    if doc.cpc_irpo_code:
+    # Ensure IRPO code is unique within the project
+    if doc.get("cpc_irpo_code") and doc.get("project"):
         clash = frappe.db.exists(
             "Task",
             {
@@ -603,31 +1158,57 @@ def validate_irpo_task(doc, method=None):
         )
         if clash:
             frappe.throw(
-                _("IRPO Code {0} is already used in this project ({1}).")
-                .format(frappe.bold(doc.cpc_irpo_code), clash)
+                _("IRPO Code {0} is already used in project {1} (Task: {2}).")
+                .format(frappe.bold(doc.cpc_irpo_code), frappe.bold(doc.project), clash)
             )
 
 
+def _recalculate_available_qty(doc):
+    """
+    UAT Issue 4 fix. Plain formula recompute on EVERY Task save — no
+    dependency on any MR/PO/PR/PI existing:
+
+        irpo_available_qty =
+            qty - irpo_mr_pending_qty - irpo_po_pending_qty
+                - irpo_pr_qty - irpo_pi_actual_qty
+
+    On a fresh row the four bucket fields are still their default 0,
+    so this alone yields Available = Budget Qty — no transaction
+    needed. Only irpo_available_qty is written here; the four bucket
+    fields are read as-is and never touched, so this can never
+    conflict with irpo_summary_refresh.refresh_irpo_child_row_summary
+    (the sole writer of the bucket fields, via direct
+    frappe.db.set_value calls off real ledger movement on MR/PO/PR/PI
+    submit/cancel).
+    """
+    for row in doc.get("custom_items_table") or []:
+        qty = flt(row.get("qty"))
+        mr_pending = flt(row.get("irpo_mr_pending_qty"))
+        po_pending = flt(row.get("irpo_po_pending_qty"))
+        pr_qty = flt(row.get("irpo_pr_qty"))
+        pi_actual = flt(row.get("irpo_pi_actual_qty"))
+        row.irpo_available_qty = qty - mr_pending - po_pending - pr_qty - pi_actual
+
+
 # ---------------------------------------------------------------------
-# Source-line lookup — THE ONE FUNCTION TO CONFIRM/SWAP (see module docstring)
+# Source-line lookup for BOQ / Sales Order
 # ---------------------------------------------------------------------
 
 def get_boq_line_source(sales_order, boq_code):
     """
-    Returns the fields an IRPO/BOQ Node must fetch from "the source line":
-        {
-            "project": ...,
-            "contract": ...,
-            "boq_code": ...,
-            "boq_description": ...,
-            "default_uom": ...,   # optional, used only to prefill the dialog
-        }
-
-    Per the real US-04 sales_order.js: cpc_contract lives directly on the
-    Sales Order (not per item), and item_code on a Sales Order Item row
-    IS the BOQ code (cpc_boq_code = item_code) — there's no separate
-    per-item BOQ-code stamp. So boq_code here is matched against
-    Sales Order Item.item_code.
+    Returns the fields an IRPO/BOQ Node must fetch from the source line:
+    {
+        "project": ...,
+        "contract": ...,
+        "boq_code": ...,        # generated Item Code (matches Sales Order Item.item_code) —
+                                 # kept under this name for backward compatibility with every
+                                 # caller/dialog that already passes/expects an Item Code here.
+        "real_boq_code": ...,   # the actual Contract BOQ Code (Item.cpc_boq_code) — THIS is
+                                 # what gets stored in Task.cpc_boq_code and used to match/
+                                 # filter Task and Contract BOQ Item rows from here on.
+        "boq_description": ...,
+        "default_uom": ...,
+    }
     """
     so = frappe.db.get_value(
         "Sales Order", sales_order, ["project", "cpc_contract"], as_dict=True
@@ -649,13 +1230,173 @@ def get_boq_line_source(sales_order, boq_code):
     if not so.project:
         frappe.throw(_("Sales Order {0} has no Project set.").format(sales_order))
 
+    real_boq_code = frappe.db.get_value("Item", boq_code, "cpc_boq_code") or boq_code
+
     return {
         "project": so.project,
         "contract": so.cpc_contract,
         "boq_code": boq_code,
+        "real_boq_code": real_boq_code,
         "boq_description": item_row.description or item_row.item_name,
         "default_uom": item_row.uom,
     }
+
+
+# ---------------------------------------------------------------------
+# Project / Sales Order resolution for BOQ Node / IRPO Tasks
+# ---------------------------------------------------------------------
+
+def resolve_task_project(task=None, project=None, sales_order=None, contract=None):
+    """Resolve the Project a BOQ Node / IRPO Task belongs to.
+
+    Resolution order (first non-empty wins):
+      1. the explicitly passed ``project``
+      2. the Task's own ``project``
+      3. the parent BOQ Node's ``project``
+      4. the Project of the linked Sales Order (``cpc_sales_order``)
+      5. the Project of the linked Construction Contract (``cpc_contract``)
+      6. the Project of any submitted Sales Order for that contract
+
+    Returns the project name or ``None``.  Never throws — callers decide
+    whether a missing project is fatal.
+    """
+    if project:
+        return project
+
+    if task is not None:
+        if task.get("project"):
+            return task.project
+        if task.get("cpc_sales_order"):
+            sales_order = task.cpc_sales_order
+        if task.get("cpc_contract"):
+            contract = task.cpc_contract
+        if task.get("parent_task"):
+            parent_project = frappe.db.get_value("Task", task.parent_task, "project")
+            if parent_project:
+                return parent_project
+
+    if sales_order and frappe.db.exists("Sales Order", sales_order):
+        so_project = frappe.db.get_value("Sales Order", sales_order, "project")
+        if so_project:
+            return so_project
+
+    if contract and frappe.db.exists("Construction Contract", contract):
+        contract_project = frappe.db.get_value("Construction Contract", contract, "project")
+        if contract_project:
+            return contract_project
+
+    if contract:
+        fallback = frappe.db.get_value(
+            "Sales Order",
+            {"docstatus": 1, "cpc_contract": contract, "project": ["is", "set"]},
+            "project",
+            order_by="creation asc",
+        )
+        if fallback:
+            return fallback
+
+    return None
+
+
+def backfill_task_project(task_name, persist=True):
+    """Fill in a blank ``Task.project`` from the Task's own contract/SO links.
+
+    Returns the resolved project name (or ``None``).  When ``persist`` is set
+    and a project was resolved for a Task that had none, the value is written
+    back to the database so the Task form, exports and API payloads all agree.
+    """
+    task = frappe.get_doc("Task", task_name) if isinstance(task_name, str) else task_name
+    if not task:
+        return None
+
+    if task.get("project"):
+        return task.project
+
+    project = resolve_task_project(task=task)
+    if project and persist:
+        frappe.db.set_value("Task", task.name, "project", project, update_modified=False)
+        task.project = project
+
+    return project
+
+
+def resolve_task_sales_order(task=None, sales_order=None, contract=None):
+    """Resolve the Sales Order a BOQ Node / IRPO Task belongs to.
+
+    Resolution order (first non-empty wins):
+      1. the explicitly passed ``sales_order``
+      2. the Task's own ``cpc_sales_order``
+      3. the parent BOQ Node's ``cpc_sales_order``
+      4. the Sales Order already used by another Task of the same contract
+         (keeps every IRPO under a contract pointing at one consistent SO)
+      5. the oldest submitted Sales Order carrying that contract
+
+    Returns the Sales Order name or ``None``.  Never throws — callers decide
+    whether a missing Sales Order is fatal.
+    """
+    if sales_order:
+        return sales_order
+
+    if task is not None:
+        if task.get("cpc_sales_order"):
+            return task.cpc_sales_order
+        if task.get("cpc_contract"):
+            contract = task.cpc_contract
+        if task.get("parent_task"):
+            parent_so = frappe.db.get_value("Task", task.parent_task, "cpc_sales_order")
+            if parent_so:
+                return parent_so
+
+    if not contract:
+        return None
+
+    # Prefer a Sales Order this contract's Tasks already reference so a contract
+    # with several Sales Orders stays internally consistent.
+    already_used = frappe.db.get_value(
+        "Task",
+        {
+            "cpc_contract": contract,
+            "cpc_sales_order": ["is", "set"],
+            "docstatus": ["<", 2],
+            "name": ["!=", task.name] if task else ["is", "set"],
+        },
+        "cpc_sales_order",
+        order_by="creation asc",
+    )
+    if already_used:
+        return already_used
+
+    # Otherwise fall back to the oldest submitted Sales Order for the contract.
+    return frappe.db.get_value(
+        "Sales Order",
+        {"docstatus": 1, "cpc_contract": contract},
+        "name",
+        order_by="creation asc",
+    )
+
+
+def backfill_task_sales_order(task_name, persist=True):
+    """Fill in a blank ``Task.cpc_sales_order`` from the Task's own contract.
+
+    Returns the resolved Sales Order name (or ``None``).  When ``persist`` is
+    set and a Sales Order was resolved for a Task that had none, the value is
+    written back so the Task form, the viewer and exports all agree.
+    """
+    task = frappe.get_doc("Task", task_name) if isinstance(task_name, str) else task_name
+    if not task:
+        return None
+
+    if task.get("cpc_sales_order"):
+        return task.cpc_sales_order
+
+    sales_order = resolve_task_sales_order(task=task)
+    if sales_order and persist:
+        frappe.db.set_value(
+            "Task", task.name, "cpc_sales_order", sales_order, update_modified=False
+        )
+        task.cpc_sales_order = sales_order
+
+    return sales_order
 
 
 # ---------------------------------------------------------------------
@@ -672,7 +1413,7 @@ def get_or_create_boq_node(sales_order, boq_code):
         "Task",
         {
             "project": source["project"],
-            "cpc_boq_code": boq_code,
+            "cpc_boq_code": source["real_boq_code"],
             "cpc_node_type": "BOQ Node",
         },
         "name",
@@ -682,55 +1423,56 @@ def get_or_create_boq_node(sales_order, boq_code):
 
     node = frappe.new_doc("Task")
     node.project = source["project"]
-    # The BOQ Line (Item Code) IS the parent task's identity — subject
-    # is the item code itself; the line description goes in the
-    # description field instead of being folded into the subject.
     node.subject = boq_code
     node.description = source.get("boq_description")
     node.is_group = 1
     node.cpc_node_type = "BOQ Node"
     node.cpc_sales_order = sales_order
     node.cpc_contract = source.get("contract")
-    node.cpc_boq_code = boq_code
+    node.cpc_boq_code = source["real_boq_code"]
     node.insert(ignore_permissions=False)
     return node.name
 
 
 # ---------------------------------------------------------------------
-# Public API: break a BOQ line into IRPOs
+# Recompute BOQ Budget Fields & Synchronize
 # ---------------------------------------------------------------------
 
+def recompute_boq_budget_fields(contract, real_boq_code):
+    """
+    Calculates cost budget, allocated budget, and remaining budget across all IRPOs.
+    Updates the BOQ Node and every IRPO child under it.
 
-def recompute_boq_budget_fields(contract, boq_code):
-    """Snapshot the BOQ line's cost budget, what's allocated across all
-    its IRPOs, and what's left — written onto the BOQ Node AND every
-    IRPO child under it (single source of truth per BOQ line)."""
-    cost_budget = frappe.db.get_value(
-        "Contract BOQ Item",
-        {"parent": contract, "item_code": boq_code},
-        "cost_budget",
-    ) or 0
+    ``real_boq_code`` is the actual Contract BOQ Code (e.g. GROUNDWORK) — the
+    same value now stored in Task.cpc_boq_code, and looked up directly
+    against Contract BOQ Item's own ``boq_code`` field (Contract BOQ Item
+    carries both boq_code and item_code as separate columns).
+    """
+    cost_budget = 0
+    if contract and frappe.db.exists("DocType", "Contract BOQ Item"):
+        cost_budget = frappe.db.get_value(
+            "Contract BOQ Item",
+            {"parent": contract, "boq_code": real_boq_code},
+            "cost_budget",
+        ) or 0
 
     allocated = frappe.db.sql(
         """
-        select coalesce(sum(cpc_budget_amount), 0)
-        from `tabTask`
-        where cpc_contract = %s
-          and cpc_boq_code = %s
-          and cpc_node_type = 'IRPO'
+        SELECT COALESCE(SUM(cpc_budget_amount), 0)
+        FROM `tabTask`
+        WHERE cpc_contract = %s
+          AND cpc_boq_code = %s
+          AND cpc_node_type = 'IRPO'
+          AND docstatus < 2
         """,
-        (contract, boq_code),
+        (contract, real_boq_code),
     )[0][0]
 
-    remaining = cost_budget - allocated
+    remaining = flt(cost_budget) - flt(allocated)
 
-    # IMPORTANT: frappe.db.set_value with a dict of filters only updates
-    # the FIRST matching row, not every match — that was the bug. Fetch
-    # every Task sharing this contract+boq_code (the BOQ Node + all its
-    # IRPO children) and update each one by name explicitly.
     task_names = frappe.get_all(
         "Task",
-        filters={"cpc_contract": contract, "cpc_boq_code": boq_code},
+        filters={"cpc_contract": contract, "cpc_boq_code": real_boq_code, "docstatus": ["<", 2]},
         pluck="name",
     )
     for name in task_names:
@@ -748,15 +1490,14 @@ def recompute_boq_budget_fields(contract, boq_code):
     return {"cost_budget": cost_budget, "allocated": allocated, "remaining": remaining}
 
 
+# ---------------------------------------------------------------------
+# Public API: Break a BOQ line into IRPOs
+# ---------------------------------------------------------------------
+
 @frappe.whitelist()
 def break_into_irpos(sales_order, boq_code, irpos):
     """
-    Create and/or update IRPOs under one BOQ line.
-
-    Each row in `irpos` may optionally carry `task_name` — the name of
-    an existing IRPO Task (loaded via "Get Previous IRPO" in the
-    dialog). Rows WITH task_name are UPDATED in place (no new Task);
-    rows WITHOUT it are CREATED as new Tasks, exactly as before.
+    Batch create and/or update IRPOs under one BOQ line with budget cap enforcement.
     """
     if isinstance(irpos, str):
         irpos = frappe.parse_json(irpos)
@@ -765,46 +1506,48 @@ def break_into_irpos(sales_order, boq_code, irpos):
         frappe.throw(_("Add at least one IRPO row."))
 
     source = get_boq_line_source(sales_order, boq_code)
+    real_boq_code = source["real_boq_code"]
     boq_node = get_or_create_boq_node(sales_order, boq_code)
+
+    company = frappe.db.get_value("Project", source["project"], "company")
+    if not company:
+        frappe.throw(_("Project {0} has no Company set — cannot create Budget.").format(source["project"]))
 
     updating_names = [row.get("task_name") for row in irpos if row.get("task_name")]
 
-    # ---- US-07: hard stop if this batch would exceed the BOQ budget ----
-    cost_budget = frappe.db.get_value(
-        "Contract BOQ Item",
-        {"parent": source["contract"], "item_code": boq_code},
-        "cost_budget",
-    ) or 0
+    # Budget cap check
+    cost_budget = 0
+    if source.get("contract") and frappe.db.exists("DocType", "Contract BOQ Item"):
+        cost_budget = frappe.db.get_value(
+            "Contract BOQ Item",
+            {"parent": source["contract"], "boq_code": real_boq_code},
+            "cost_budget",
+        ) or 0
 
-    # Existing allocation EXCLUDING the rows we're about to update — their
-    # old amount is being replaced by the row's new amount, not added on
-    # top of it. Without this exclusion, editing an existing IRPO's own
-    # amount would incorrectly count it twice.
-    filters_sql = "cpc_contract = %s and cpc_boq_code = %s and cpc_node_type = 'IRPO'"
-    params = [source["contract"], boq_code]
-    if updating_names:
-        placeholders = ", ".join(["%s"] * len(updating_names))
-        filters_sql += f" and name not in ({placeholders})"
-        params.extend(updating_names)
+    if cost_budget > 0:
+        filters_sql = "cpc_contract = %s AND cpc_boq_code = %s AND cpc_node_type = 'IRPO' AND docstatus < 2"
+        params = [source["contract"], real_boq_code]
+        if updating_names:
+            placeholders = ", ".join(["%s"] * len(updating_names))
+            filters_sql += f" AND name NOT IN ({placeholders})"
+            params.extend(updating_names)
 
-    existing_allocated = frappe.db.sql(
-        f"select coalesce(sum(cpc_budget_amount), 0) from `tabTask` where {filters_sql}",
-        tuple(params),
-    )[0][0]
+        existing_allocated = frappe.db.sql(
+            f"SELECT COALESCE(SUM(cpc_budget_amount), 0) FROM `tabTask` WHERE {filters_sql}",
+            tuple(params),
+        )[0][0]
 
-    new_total = sum(flt(row.get("cpc_budget_amount")) for row in irpos)
-    projected = existing_allocated + new_total
+        new_total = sum(flt(row.get("cpc_budget_amount")) for row in irpos)
+        projected = flt(existing_allocated) + flt(new_total)
 
-    if projected > cost_budget:
-        frappe.throw(
-            _("Cannot save these IRPOs: allocating {0} would bring the total to {1}, exceeding this BOQ line's cost budget of {2} by {3}.").format(
-                frappe.format_value(new_total, {"fieldtype": "Currency"}),
-                frappe.format_value(projected, {"fieldtype": "Currency"}),
-                frappe.format_value(cost_budget, {"fieldtype": "Currency"}),
-                frappe.format_value(projected - cost_budget, {"fieldtype": "Currency"}),
+        if projected > cost_budget:
+            frappe.throw(
+                _("Cannot save IRPOs: Projected total {0} exceeds the BOQ line's cost budget of {1} by {2}.").format(
+                    frappe.format_value(projected, {"fieldtype": "Currency"}),
+                    frappe.format_value(cost_budget, {"fieldtype": "Currency"}),
+                    frappe.format_value(projected - cost_budget, {"fieldtype": "Currency"}),
+                )
             )
-        )
-    # ---- end budget check ----
 
     created = []
     updated = []
@@ -815,17 +1558,15 @@ def break_into_irpos(sales_order, boq_code, irpos):
         if not row.get("cpc_uom"):
             frappe.throw(_("Every IRPO needs a UoM."))
 
+        if not row.get("account"):
+            frappe.throw(_("Every IRPO needs an Account."))
+
         task_name = row.get("task_name")
 
         if task_name:
             irpo = frappe.get_doc("Task", task_name)
-
-            # Safety: never let an edited/stray task_name repoint at a
-            # Task that isn't actually an IRPO under this BOQ line.
-            if irpo.cpc_node_type != "IRPO" or irpo.cpc_boq_code != boq_code:
-                frappe.throw(
-                    _("{0} is not an existing IRPO under BOQ line {1}.").format(task_name, boq_code)
-                )
+            if irpo.cpc_node_type != "IRPO" or irpo.cpc_boq_code != real_boq_code:
+                frappe.throw(_("{0} is not an IRPO under BOQ line {1}.").format(task_name, boq_code))
 
             irpo.subject = row["subject"]
             irpo.cpc_uom = row["cpc_uom"]
@@ -834,6 +1575,7 @@ def break_into_irpos(sales_order, boq_code, irpos):
             irpo.exp_end_date = row.get("exp_end_date")
             irpo.cpc_budget_qty = row.get("cpc_budget_qty")
             irpo.cpc_budget_amount = row.get("cpc_budget_amount")
+            irpo.account = row.get("account")
             irpo.save(ignore_permissions=False)
             updated.append(irpo.name)
         else:
@@ -846,81 +1588,54 @@ def break_into_irpos(sales_order, boq_code, irpos):
             irpo.cpc_is_irpo = 1
             irpo.cpc_sales_order = sales_order
             irpo.cpc_contract = source.get("contract")
-            irpo.cpc_boq_code = boq_code
+            irpo.cpc_boq_code = real_boq_code
             irpo.cpc_uom = row["cpc_uom"]
             irpo.cpc_irpo_code = row.get("cpc_irpo_code")
             irpo.exp_start_date = row.get("exp_start_date")
             irpo.exp_end_date = row.get("exp_end_date")
             irpo.cpc_budget_qty = row.get("cpc_budget_qty")
             irpo.cpc_budget_amount = row.get("cpc_budget_amount")
+            irpo.account = row.get("account")
             irpo.insert(ignore_permissions=False)
             created.append(irpo.name)
-
-    # ------------------------------------------------------------------
-    # Keep the BOQ Node's native "Dependent Tasks" grid (depends_on,
-    # child doctype Task Depends On) in sync as a convenience view —
-    # per earlier notes, that grid mirrors task/subject/custom_uom/
-    # custom_planned_start/custom_planned_end for every IRPO under
-    # this BOQ Node.
-    #
-    # ⚠️ RECONSTRUCTED — I don't have your original append block for
-    # `created`, so this covers both created AND updated rows using
-    # the fieldnames you confirmed earlier (custom_uom,
-    # custom_planned_start, custom_planned_end). Please diff this
-    # against your actual code before relying on it.
-    # ------------------------------------------------------------------
+        sync_budget_for_irpo(irpo.name, irpo.account, flt(irpo.cpc_budget_amount), company)
+    # Sync BOQ Node depends_on grid
     if created or updated:
-        node_doc = frappe.get_doc("Task", boq_node)
-        existing_dep_tasks = {dep.task for dep in node_doc.get("depends_on", [])}
-        by_task_name = {}
-        for row in irpos:
-            key = row.get("task_name")
-            by_task_name[key] = row
+        try:
+            node_doc = frappe.get_doc("Task", boq_node)
+            existing_dep_tasks = {dep.task for dep in node_doc.get("depends_on", [])}
+            touched = False
 
-        touched = False
+            for task_id in created:
+                if task_id not in existing_dep_tasks:
+                    node_doc.append("depends_on", {"task": task_id})
+                    touched = True
 
-        # New rows: append a Dependent Task entry if not already present.
-        # `created` was built in the same iteration order as the rows
-        # without task_name, so zip them back up in order here.
-        new_row_iter = iter(created)
-        for row in irpos:
-            if row.get("task_name"):
-                continue
-            task_name = next(new_row_iter, None)
-            if not task_name or task_name in existing_dep_tasks:
-                continue
-            dep_row = node_doc.append("depends_on", {})
-            dep_row.task = task_name
-            dep_row.subject = row["subject"]
-            dep_row.custom_uom = row["cpc_uom"]
-            dep_row.custom_planned_start = row.get("exp_start_date")
-            dep_row.custom_planned_end = row.get("exp_end_date")
-            touched = True
+            if touched:
+                node_doc.save(ignore_permissions=False)
+        except Exception:
+            pass
 
-        # Updated rows: refresh the matching Dependent Task entry in place.
-        for dep_row in node_doc.get("depends_on", []):
-            src = by_task_name.get(dep_row.task)
-            if not src:
-                continue
-            dep_row.subject = src["subject"]
-            dep_row.custom_uom = src["cpc_uom"]
-            dep_row.custom_planned_start = src.get("exp_start_date")
-            dep_row.custom_planned_end = src.get("exp_end_date")
-            touched = True
-
-        if touched:
-            node_doc.save(ignore_permissions=False)
-
-    if created or updated:
-        recompute_boq_budget_fields(source["contract"], boq_code)
+        if source.get("contract"):
+            recompute_boq_budget_fields(source["contract"], real_boq_code)
 
     return {"boq_node": boq_node, "created": created, "updated": updated}
 
 
+# ---------------------------------------------------------------------
+# Helper APIs for Dialogs & Views
+# ---------------------------------------------------------------------
+
 @frappe.whitelist()
 def get_boq_lines_for_sales_order(sales_order):
-    """Helper for the dialog: list BOQ codes (= item_code) available on
-    this Sales Order, for the picker."""
+    """List BOQ codes available on a Sales Order.
+
+    Returned ``boq_code`` values are the generated Item Codes (matching
+    Sales Order Item.item_code) — this is the identifier the dialog/API
+    plumbing passes around externally. It is resolved to the real BOQ
+    Code internally (get_boq_line_source) wherever Task/Contract BOQ Item
+    matching happens, so no client-side change is needed.
+    """
     so = frappe.get_doc("Sales Order", sales_order)
     seen = {}
     for item in so.items:
@@ -932,41 +1647,40 @@ def get_boq_lines_for_sales_order(sales_order):
 
 @frappe.whitelist()
 def get_boq_budget_summary(sales_order, boq_code):
-    """Called when the user picks a BOQ Line in the dialog — returns
-    the parent BOQ line's cost budget, what's already allocated to
-    existing IRPOs under it, what's left, and how many IRPOs already
-    exist (used to show/hide the "Get Previous IRPO" button)."""
+    """Returns cost budget, allocated budget, remaining budget, and IRPO count for a BOQ line"""
     source = get_boq_line_source(sales_order, boq_code)
-
-    cost_budget = frappe.db.get_value(
-        "Contract BOQ Item",
-        {"parent": source["contract"], "item_code": boq_code},
-        "cost_budget",
-    ) or 0
+    real_boq_code = source["real_boq_code"]
+    cost_budget = 0
+    if source.get("contract") and frappe.db.exists("DocType", "Contract BOQ Item"):
+        cost_budget = frappe.db.get_value(
+            "Contract BOQ Item",
+            {"parent": source["contract"], "boq_code": real_boq_code},
+            "cost_budget",
+        ) or 0
 
     irpo_count, allocated = frappe.db.sql(
         """
-        select count(*), coalesce(sum(cpc_budget_amount), 0)
-        from `tabTask`
-        where cpc_contract = %s
-          and cpc_boq_code = %s
-          and cpc_node_type = 'IRPO'
+        SELECT COUNT(*), COALESCE(SUM(cpc_budget_amount), 0)
+        FROM `tabTask`
+        WHERE cpc_contract = %s
+          AND cpc_boq_code = %s
+          AND cpc_node_type = 'IRPO'
+          AND docstatus < 2
         """,
-        (source["contract"], boq_code),
+        (source["contract"], real_boq_code),
     )[0]
 
     return {
         "cost_budget": cost_budget,
         "allocated": allocated,
-        "remaining": cost_budget - flt(allocated),
+        "remaining": flt(cost_budget) - flt(allocated),
         "irpo_count": irpo_count,
     }
 
 
 @frappe.whitelist()
 def get_boq_summary_for_sales_order(sales_order):
-    """Powers the summary table at the top of the dialog: every BOQ
-    line on this SO, its IRPO count, and remaining budget."""
+    """Summary table of all BOQ lines on a Sales Order"""
     so = frappe.get_doc("Sales Order", sales_order)
     contract = so.cpc_contract
     seen = {}
@@ -977,159 +1691,1185 @@ def get_boq_summary_for_sales_order(sales_order):
 
     rows = []
     for boq_code, description in seen.items():
-        cost_budget = frappe.db.get_value(
-            "Contract BOQ Item",
-            {"parent": contract, "item_code": boq_code},
-            "cost_budget",
-        ) or 0
+        real_boq_code = frappe.db.get_value("Item", boq_code, "cpc_boq_code") or boq_code
+
+        cost_budget = 0
+        if contract and frappe.db.exists("DocType", "Contract BOQ Item"):
+            cost_budget = frappe.db.get_value(
+                "Contract BOQ Item",
+                {"parent": contract, "boq_code": real_boq_code},
+                "cost_budget",
+            ) or 0
+
         irpo_count, allocated = frappe.db.sql(
             """
-            select count(*), coalesce(sum(cpc_budget_amount), 0)
-            from `tabTask`
-            where cpc_contract = %s and cpc_boq_code = %s and cpc_node_type = 'IRPO'
+            SELECT COUNT(*), COALESCE(SUM(cpc_budget_amount), 0)
+            FROM `tabTask`
+            WHERE cpc_contract = %s AND cpc_boq_code = %s AND cpc_node_type = 'IRPO' AND docstatus < 2
             """,
-            (contract, boq_code),
+            (contract, real_boq_code),
         )[0]
+
         rows.append({
             "boq_code": boq_code,
             "description": description,
             "irpo_count": irpo_count,
-            "remaining": cost_budget - flt(allocated),
+            "remaining": flt(cost_budget) - flt(allocated),
         })
     return rows
 
 
 @frappe.whitelist()
 def get_irpos_for_boq_line(sales_order, boq_code):
-    """Powers the 'View' popup AND the 'Get Previous IRPO' button:
-    existing IRPOs under one BOQ line. `name` is included so the
-    client can carry it as `task_name` and update-in-place on save."""
+    """Returns existing IRPOs under one BOQ line"""
     source = get_boq_line_source(sales_order, boq_code)
     return frappe.get_all(
         "Task",
         filters={
             "cpc_contract": source["contract"],
-            "cpc_boq_code": boq_code,
+            "cpc_boq_code": source["real_boq_code"],
             "cpc_node_type": "IRPO",
+            "docstatus": ["<", 2],
         },
-        fields=["name", "subject", "cpc_uom", "cpc_budget_qty", "cpc_budget_amount",
-                "exp_start_date", "exp_end_date"],
+        fields=["name", "subject", "cpc_uom", "cpc_budget_qty", "cpc_budget_amount","account",
+                "exp_start_date", "exp_end_date", "cpc_irpo_code", "status", "progress"],
         order_by="creation asc",
     )
 
 
-import os
-import datetime as dt
-from io import BytesIO
+# ---------------------------------------------------------------------
+# File Upload / Import Parser for IRPOs
+# ---------------------------------------------------------------------
 
-import frappe
-from frappe import _
-from frappe.utils.csvutils import read_csv_content
-
-XLSX_MAGIC = b"PK\x03\x04"                       # xlsx is a zip archive
-XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"   # legacy OLE binary format
-
-# IRPO_COLUMNS order (client-side): subject(0), cpc_uom(1),
-# exp_start_date(2), exp_end_date(3), cpc_budget_qty(4), cpc_budget_amount(5)
-#
-# NOTE: this CSV/XLSX round-trip does not carry `task_name`. If a user
-# downloads a table that already has "Get Previous IRPO" rows loaded
-# and re-uploads it, those rows will come back in as NEW IRPOs rather
-# than updates to the originals. Pre-existing limitation, unchanged
-# by the update-vs-create work above — flagging in case it matters.
+XLSX_MAGIC = b"PK\x03\x04"
+XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 DATE_COLUMN_INDICES = {2, 3}
 
 
 def _normalize_date(value):
-	"""
-	Coerce a cell into an ISO YYYY-MM-DD string, which is what
-	Frappe's Date field expects internally.
-
-	Handles two cases:
-	- A real datetime.date/datetime object (openpyxl returns these
-	  when the source cell is a genuine Excel date, not text).
-	- A DD-MM-YYYY text string (what our template actually uses, per
-	  the uploaded sample — e.g. "25-08-2026"). Explicit strptime
-	  rather than frappe.utils.getdate(), since getdate()'s
-	  interpretation of an ambiguous string depends on System
-	  Settings' date format and isn't guaranteed to match the
-	  template's DD-MM-YYYY convention.
-	"""
-	if value in (None, ""):
-		return ""
-	if isinstance(value, dt.datetime):
-		return value.date().isoformat()
-	if isinstance(value, dt.date):
-		return value.isoformat()
-	try:
-		return dt.datetime.strptime(str(value).strip(), "%d-%m-%Y").date().isoformat()
-	except ValueError:
-		# Not a recognizable date — leave as-is so it's visible in the
-		# grid and the user gets a clear validation error on submit,
-		# rather than silently dropping or guessing at their data.
-		return str(value).strip()
+    if value in (None, ""):
+        return ""
+    if isinstance(value, dt.datetime):
+        return value.date().isoformat()
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    try:
+        return dt.datetime.strptime(str(value).strip(), "%d-%m-%Y").date().isoformat()
+    except ValueError:
+        return str(value).strip()
 
 
 def _cell_to_str(cell):
-	if cell is None:
-		return ""
-	if isinstance(cell, dt.datetime):
-		return cell.date().isoformat()
-	if isinstance(cell, dt.date):
-		return cell.isoformat()
-	return str(cell)
+    if cell is None:
+        return ""
+    if isinstance(cell, dt.datetime):
+        return cell.date().isoformat()
+    if isinstance(cell, dt.date):
+        return cell.isoformat()
+    return str(cell)
 
 
 def _row_to_str_list(row):
-	out = []
-	for idx, cell in enumerate(row):
-		if idx in DATE_COLUMN_INDICES:
-			out.append(_normalize_date(cell))
-		else:
-			out.append(_cell_to_str(cell))
-	return out
+    out = []
+    for idx, cell in enumerate(row):
+        if idx in DATE_COLUMN_INDICES:
+            out.append(_normalize_date(cell))
+        else:
+            out.append(_cell_to_str(cell))
+    return out
 
 
 @frappe.whitelist()
 def parse_uploaded_irpo_file(file_url):
+    file_doc = frappe.get_doc("File", {"file_url": file_url})
+    content = file_doc.get_content()
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+
+    if content.startswith(XLSX_MAGIC):
+        import openpyxl
+
+        workbook = openpyxl.load_workbook(BytesIO(content), data_only=True, read_only=True)
+        sheet = workbook.worksheets[0]
+        rows = [list(row) for row in sheet.iter_rows(values_only=True)]
+        workbook.close()
+
+    elif content.startswith(XLS_MAGIC):
+        frappe.throw(_(
+            "Legacy .xls files are not supported. Please save as .xlsx in Excel and re-upload."
+        ))
+    else:
+        text = content.decode("utf-8-sig", errors="replace")
+        rows = read_csv_content(text)
+
+    return [_row_to_str_list(row) for row in (rows or [])]
+
+
+
+
+def _create_and_submit_budget(task_name, account, budget_amount, company, fiscal_year):
+	budget = frappe.new_doc("Budget")
+	budget.budget_against = "Task"
+	budget.task = task_name
+	budget.company = company
+	budget.fiscal_year = fiscal_year
+
+	budget.applicable_on_material_request = 1
+	budget.action_if_annual_budget_exceeded_on_mr = "Warn"
+	budget.action_if_accumulated_monthly_budget_exceeded_on_mr = "Warn"
+
+	budget.applicable_on_purchase_order = 1
+	budget.applicable_on_booking_actual_expenses = 1
+	budget.action_if_annual_budget_exceeded = "Warn"
+	budget.action_if_accumulated_monthly_budget_exceeded = "Warn"
+
+	budget.append("accounts", {"account": account, "budget_amount": budget_amount})
+	budget.insert(ignore_permissions=True)
+
+	# The user breaking the BOQ line into IRPOs may not hold Budget submit
+	# rights. If submit fails (e.g. duplicate-Budget check) the exception
+	# propagates and rolls back the whole action, so an IRPO is never left
+	# without an active Budget.
+	budget.flags.ignore_permissions = True
+	budget.submit()
+	return budget.name
+
+
+def sync_budget_for_irpo(task_name, account, budget_amount, company):
+	"""Create and SUBMIT the Budget when the IRPO is first created; keep it in
+	sync on edits (e.g. via Get Previous IRPO).
+
+	- No Budget yet            -> create it and submit it.
+	- Budget is Draft          -> update in place, leave it Draft (existing
+	                              records are deliberately not auto-submitted).
+	- Budget is Submitted      -> nothing to do if account/amount are unchanged;
+	                              otherwise cancel it and create + submit a new one
+	                              (a submitted Budget cannot be edited in place).
 	"""
-	Parse an uploaded CSV/XLSX file for the "Break into IRPOs" dialog
-	and return it as a plain list of row-arrays, with the two date
-	columns (Planned Start / Planned End) normalized to ISO
-	YYYY-MM-DD so Frappe's Date field renders them correctly.
+	fiscal_year = get_fiscal_year(nowdate(), company=company)[0]
 
-	Format is detected by sniffing the file's magic bytes rather than
-	trusting the filename/extension.
+	# docstatus < 2: a cancelled Budget must never be picked up as "the" Budget.
+	existing_name = frappe.db.exists(
+		"Budget",
+		{"budget_against": "Task", "task": task_name, "docstatus": ["<", 2]},
+	)
 
-	.xlsx is read directly with openpyxl (a hard dependency of every
-	Frappe/ERPNext bench) rather than frappe.utils.xlsxutils, whose
-	kwargs have changed across Frappe versions.
+	replaced_name = None
+	if existing_name:
+		budget = frappe.get_doc("Budget", existing_name)
 
-	Legacy .xls (pre-2007 binary format) is explicitly rejected with a
-	clear message — openpyxl can't read it.
-	"""
-	file_doc = frappe.get_doc("File", {"file_url": file_url})
-	content = file_doc.get_content()
-	if isinstance(content, str):
-		content = content.encode("utf-8")
+		if budget.docstatus == 0:
+			if budget.accounts:
+				budget.accounts[0].account = account
+				budget.accounts[0].budget_amount = budget_amount
+			else:
+				budget.append("accounts", {"account": account, "budget_amount": budget_amount})
+			budget.company = company
+			budget.fiscal_year = fiscal_year
+			budget.save(ignore_permissions=True)
+			return budget.name
 
-	if content.startswith(XLSX_MAGIC):
-		import openpyxl
+		# Submitted Budget.
+		current = budget.accounts[0] if budget.accounts else None
+		if current and current.account == account and flt(current.budget_amount) == flt(budget_amount):
+			return budget.name  # nothing changed
 
-		workbook = openpyxl.load_workbook(BytesIO(content), data_only=True, read_only=True)
-		sheet = workbook.worksheets[0]
-		rows = [list(row) for row in sheet.iter_rows(values_only=True)]
-		workbook.close()
+		budget.flags.ignore_permissions = True
+		budget.cancel()
+		replaced_name = budget.name
 
-	elif content.startswith(XLS_MAGIC):
-		frappe.throw(_(
-			"This looks like a legacy .xls file (Excel 97-2003 format), which isn't "
-			"supported. Please open it in Excel and use \"Save As\" \u2192 .xlsx, then "
-			"upload again."
-		))
+	new_name = _create_and_submit_budget(task_name, account, budget_amount, company, fiscal_year)
 
-	else:
-		text = content.decode("utf-8-sig", errors="replace")
-		rows = read_csv_content(text)
+	if replaced_name:
+		frappe.msgprint(
+			_("Budget {0} was cancelled and replaced by {1} because the IRPO's account/amount changed.").format(
+				replaced_name, new_name
+			),
+			alert=True, indicator="orange",
+		)
+	return new_name
 
-	return [_row_to_str_list(row) for row in (rows or [])]
+# ---------------------------------------------------------------------
+# Create BOQ Node Tasks for a submitted Construction Contract
+# ---------------------------------------------------------------------
+
+@frappe.whitelist()
+def create_boq_nodes_for_contract(contract_name):
+    """Create a BOQ Node Task for every BOQ line of the given Construction Contract.
+
+    Called from the Contract Center dialog after the Construction Contract is
+    submitted, so the new contract's BOQ items appear immediately as Group RPO
+    rows. Idempotent — existing BOQ Nodes for the same contract + boq_code are
+    left intact.
+
+    Returns a list of created (or already-existing) Task names.
+
+    This path already receives the real Contract BOQ Code directly from
+    Contract BOQ Item (item.get("boq_code")), so cpc_boq_code is correct
+    here without any change — and now that get_or_create_boq_node() also
+    matches on the real code, a BOQ Node created via this planner path and
+    one created via the Sales Order "Break into IRPOs" dialog correctly
+    resolve to the SAME Task instead of creating duplicates.
+    """
+    contract = frappe.get_doc("Construction Contract", contract_name)
+    if not contract.boq_items:
+        return []
+
+    created = []
+    for item in contract.boq_items:
+        boq_code = item.get("boq_code") or item.get("item_code")
+        if not boq_code:
+            continue
+
+        # Idempotent: skip if a BOQ Node already exists for this contract + boq_code.
+        existing = frappe.db.get_value(
+            "Task",
+            {"cpc_contract": contract_name, "cpc_boq_code": boq_code, "cpc_node_type": "BOQ Node"},
+            "name",
+        )
+        if existing:
+            # Nodes created before Project / Sales Order stamping existed still
+            # carry blanks — heal them so their IRPO children inherit them.
+            backfill_task_project(existing)
+            backfill_task_sales_order(existing)
+            created.append(existing)
+            continue
+
+        node = frappe.new_doc("Task")
+        node.subject = boq_code
+        node.description = item.get("description") or ""
+        node.is_group = 1
+        node.cpc_node_type = "BOQ Node"
+        node.cpc_contract = contract_name
+        node.cpc_boq_code = boq_code
+        node.cpc_boq_cost_budget = flt(item.get("cost_budget") or item.get("amount") or 0)
+        node.project = resolve_task_project(contract=contract_name) or None
+        node.cpc_sales_order = resolve_task_sales_order(contract=contract_name) or None
+        node.insert(ignore_permissions=True)
+        created.append(node.name)
+
+    frappe.db.commit()
+    return created
+
+
+# ---------------------------------------------------------------------
+# IRPO Task Detail Viewer — data & save APIs
+# ---------------------------------------------------------------------
+
+def _irpo_connections(task_name):
+    """Linked documents shown as connections on the IRPO viewer Overview tab.
+
+    Budget          – active (non-cancelled) Budget docs budgeted against this Task.
+    Material Request – MRs whose item rows carry this IRPO (task / cpc_irpo).
+    Purchase Order   – POs whose item rows carry this IRPO (line-level task link).
+    """
+    connections = {
+        "Budget": [
+            {"doctype": "Budget", "name": b.name}
+            for b in frappe.db.get_all(
+                "Budget",
+                filters={"budget_against": "Task", "task": task_name, "docstatus": ["<", 2]},
+                fields=["name"],
+                order_by="docstatus desc, creation desc",
+            )
+        ],
+        "Material Request": [
+            {"doctype": "Material Request", "name": n}
+            for n in frappe.db.sql_list(
+                """
+                select distinct parent from `tabMaterial Request Item`
+                where parenttype = 'Material Request' and (task = %s or cpc_irpo = %s)
+                """,
+                (task_name, task_name),
+            )
+        ],
+        "Purchase Order": [
+            {"doctype": "Purchase Order", "name": n}
+            for n in frappe.db.sql_list(
+                """
+                select distinct parent from `tabPurchase Order Item`
+                where parenttype = 'Purchase Order' and task = %s
+                """,
+                task_name,
+            )
+        ],
+    }
+    return connections
+
+
+@frappe.whitelist()
+def get_irpo_task_detail(task_name):
+    """Return all data needed to populate the IRPO Task Detail Viewer dialog.
+
+    Tabs covered:
+      1. Overview & General  – all Task CPC / IRPO section fields
+      2. Items Details       – Task `custom_items_table` child rows
+      3. Unplanned Items     – Task `custom_irpo_unplanned_item` child rows
+      4. Dual Budget          – budget amounts + parent BOQ remaining
+      5. Progress & History   – IRPO Quantity Ledger history
+    """
+    task = frappe.get_doc("Task", task_name)
+
+    # Parent BOQ node label
+    parent_task_subject = None
+    parent_boq_remaining = None
+    if task.parent_task:
+        parent_task_subject = frappe.db.get_value("Task", task.parent_task, "subject")
+        parent_boq_remaining = frappe.db.get_value(
+            "Task", task.parent_task, "cpc_boq_budget_remaining"
+        )
+
+    # Project name (full).  Tasks created before Project stamping existed can
+    # still carry a blank project — resolve it from the contract / parent BOQ
+    # Node and write it back so the Task form and this viewer agree.
+    project = task.project or backfill_task_project(task_name)
+    project_name = None
+    if project:
+        project_name = frappe.db.get_value("Project", project, "project_name") or project
+
+    # Same for the Sales Order: fall back to the contract's submitted SO so the
+    # "Sales Order (RPO)" field is populated on legacy tasks too.
+    sales_order = task.cpc_sales_order or backfill_task_sales_order(task_name)
+    sales_order_name = None
+    if sales_order:
+        sales_order_name = frappe.db.get_value("Sales Order", sales_order, "name") or sales_order
+
+    # Predecessor tasks
+    depends_on_tasks = ", ".join(
+        frappe.db.get_all(
+            "Task Depends On",
+            filters={"parent": task_name},
+            fields=["task"],
+            pluck="task",
+        )
+    )
+
+    # --- Progress & History: IRPO Quantity Ledger ---
+    progress_history = []
+    try:
+        ledger_rows = frappe.db.get_all(
+            "IRPO Quantity Ledger",
+            filters={"irpo": task_name, "is_cancelled": 0},
+            fields=["posting_date", "qty AS period_pct", "voucher_no", "stage", "docstatus"],
+            order_by="posting_date asc, creation asc",
+        )
+        cumulative = 0.0
+        for row in ledger_rows:
+            period = flt(row.get("period_pct") or 0)
+            cumulative += period
+            progress_history.append({
+                "posting_date": str(row.posting_date) if row.posting_date else "",
+                "period_pct": period,
+                "cumulative_pct": cumulative,
+                "earned_value": period * flt(task.cpc_budget_amount) / 100
+                    if task.cpc_uom in ("Percent", "%") else period,
+                "voucher_no": row.voucher_no,
+                "docstatus": row.docstatus,
+            })
+    except Exception:
+        pass
+
+    # --- Items: Task `custom_items_table` child rows ---
+    item_rows = []
+    for row in task.get("custom_items_table") or []:
+        item_rows.append({
+            "name": row.name,  # child row ID needed for edits
+            "irpo_budget_row_ref": row.irpo_budget_row_ref,
+            "irpo_item_type": row.irpo_item_type,
+            "item": row.item,
+            "item_name": frappe.db.get_value("Item", row.item, "item_name") if row.item else None,
+            "uom": row.uom,
+            "qty": flt(row.qty),
+            "amount": flt(row.amount),
+            "irpo_mr_pending_qty": flt(row.irpo_mr_pending_qty),
+            "irpo_po_pending_qty": flt(row.irpo_po_pending_qty),
+            "irpo_pr_qty": flt(row.irpo_pr_qty),
+            "irpo_pi_actual_qty": flt(row.irpo_pi_actual_qty),
+            "irpo_available_qty": flt(row.irpo_available_qty),
+        })
+
+    # --- Unplanned Items: Task `custom_irpo_unplanned_item` child rows ---
+    unplanned_rows = []
+    for row in task.get("custom_irpo_unplanned_item") or []:
+        unplanned_rows.append({
+            "name": row.name,  # child row ID needed for edits
+            "unplanned_row_ref": row.unplanned_row_ref,
+            "irpo_item_type": row.irpo_item_type,
+            "item": row.item,
+            "item_name": frappe.db.get_value("Item", row.item, "item_name") if row.item else None,
+            "uom": row.uom,
+            "qty": flt(row.qty),
+            "irpo_mr_pending_qty": flt(row.irpo_mr_pending_qty),
+            "irpo_po_pending_qty": flt(row.irpo_po_pending_qty),
+            "irpo_pr_qty": flt(row.irpo_pr_qty),
+            "irpo_pi_actual_qty": flt(row.irpo_pi_actual_qty),
+            "irpo_available_qty": flt(row.irpo_available_qty),
+        })
+
+    return {
+        # Core fields
+        "name": task.name,
+        "subject": task.subject,
+        "status": task.status,
+        "project": project,
+        "project_name": project_name,
+        "parent_task": task.parent_task,
+        "parent_task_subject": parent_task_subject,
+        # Custom CPC / IRPO section fields
+        "cpc_is_irpo": task.cpc_is_irpo,
+        "cpc_node_type": task.cpc_node_type,
+        "cpc_contract": task.cpc_contract,
+        "cpc_sales_order": sales_order,
+        "cpc_sales_order_name": sales_order_name,
+        "cpc_boq_code": task.cpc_boq_code,
+        "cpc_irpo_code": task.cpc_irpo_code,
+        "cpc_uom": task.cpc_uom,
+        "account": task.account,
+        "color": task.color or "",
+        "cpc_budget_qty": flt(task.cpc_budget_qty),
+        "cpc_budget_amount": flt(task.cpc_budget_amount),
+        "cpc_boq_cost_budget": flt(task.cpc_boq_cost_budget),
+        "cpc_boq_budget_allocated": flt(task.cpc_boq_budget_allocated),
+        "cpc_boq_budget_remaining": flt(task.cpc_boq_budget_remaining),
+        # Schedule
+        "exp_start_date": str(task.exp_start_date) if task.exp_start_date else None,
+        "exp_end_date": str(task.exp_end_date) if task.exp_end_date else None,
+        "depends_on_tasks": depends_on_tasks,
+        # Progress
+        "progress": flt(task.progress or 0),
+        # Budget
+        "parent_boq_remaining": flt(parent_boq_remaining) if parent_boq_remaining is not None else None,
+        # Related data
+        "items": item_rows,
+        "unplanned_items": unplanned_rows,
+        "progress_history": progress_history,
+        "connections": _irpo_connections(task_name),
+    }
+
+
+@frappe.whitelist()
+def save_irpo_task_fields(task_name, fields_json):
+    """Patch a subset of editable fields on a Task from the IRPO viewer.
+
+    ``fields_json`` — JSON dict with field-name → value pairs.
+    Only whitelisted fields are updated (others are silently ignored).
+    ``color`` is written directly via db.set_value to avoid Task hooks.
+    Other fields use the full ORM save path.
+    """
+    if isinstance(fields_json, str):
+        fields_json = frappe.parse_json(fields_json)
+
+    ALLOWED = {
+        "subject", "project", "cpc_sales_order", "cpc_contract",
+        "cpc_node_type", "account", "cpc_irpo_code", "cpc_uom", "cpc_boq_code",
+        "exp_start_date", "exp_end_date",
+        "cpc_budget_qty", "cpc_budget_amount",
+        "color",
+    }
+
+    updates = {k: v for k, v in fields_json.items() if k in ALLOWED}
+    if not updates:
+        return {"updated": 0}
+
+    # Write color directly via db.set_value — bypasses Task hooks and is safe
+    # for a simple color string.  Empty string is kept as-is (resets the color).
+    if "color" in updates:
+        frappe.db.set_value("Task", task_name, "color", updates.pop("color") or None,
+                            update_modified=False)
+
+    # Write remaining fields through the ORM so hooks fire normally.
+    if updates:
+        task = frappe.get_doc("Task", task_name)
+        for field, value in updates.items():
+            task.set(field, value or None)
+        task.flags.ignore_permissions = True
+        task.save()
+
+    frappe.db.commit()
+    total_written = len(fields_json) - len(updates)
+    return {"updated": total_written}
+
+
+@frappe.whitelist()
+def save_irpo_task_items(task_name, items_json):
+    """Replace the custom_items_table child rows on a Task from the IRPO viewer.
+
+    ``items_json`` — JSON list of row dicts with keys:
+        name (optional, existing row ID), item, uom, qty, amount,
+        irpo_budget_row_ref (preserved as-is if present)
+
+    Existing rows not present in the payload are deleted.
+    New rows (no ``name``) are appended.
+    Returns the updated items list (same shape as get_irpo_task_detail).
+    """
+    if isinstance(items_json, str):
+        items_json = frappe.parse_json(items_json)
+
+    if not isinstance(items_json, list):
+        frappe.throw(_("items_json must be a list."))
+
+    task = frappe.get_doc("Task", task_name)
+
+    # Build a lookup of existing rows by name
+    existing_by_name = {r.name: r for r in task.get("custom_items_table") or []}
+
+    # Rebuild the child table from the payload
+    task.set("custom_items_table", [])
+    for row_data in items_json:
+        if not row_data.get("item"):
+            continue  # skip blank rows
+        row = task.append("custom_items_table", {})
+        # Preserve the existing row name so Frappe updates in-place instead of deleting + re-creating
+        existing_row = existing_by_name.get(row_data.get("name"))
+        if existing_row:
+            row.name = existing_row.name
+        row.irpo_budget_row_ref = row_data.get("irpo_budget_row_ref") or ""
+        row.irpo_item_type = row_data.get("irpo_item_type") or ""
+        row.item = row_data.get("item") or ""
+        row.uom = row_data.get("uom") or ""
+        row.qty = flt(row_data.get("qty") or 0)
+        row.amount = flt(row_data.get("amount") or 0)
+        # Read-only computed fields are NOT overwritten; keep existing values
+        if existing_row:
+            row.irpo_mr_pending_qty = flt(existing_row.irpo_mr_pending_qty)
+            row.irpo_po_pending_qty = flt(existing_row.irpo_po_pending_qty)
+            row.irpo_pr_qty = flt(existing_row.irpo_pr_qty)
+            row.irpo_pi_actual_qty = flt(existing_row.irpo_pi_actual_qty)
+            row.irpo_available_qty = flt(existing_row.irpo_available_qty)
+
+    task.flags.ignore_permissions = True
+    task.save()
+    frappe.db.commit()
+
+    # Return the refreshed items so the frontend can redraw
+    updated_rows = []
+    for row in task.get("custom_items_table") or []:
+        updated_rows.append({
+            "name": row.name,
+            "irpo_budget_row_ref": row.irpo_budget_row_ref,
+            "irpo_item_type": row.irpo_item_type,
+            "item": row.item,
+            "item_name": frappe.db.get_value("Item", row.item, "item_name") if row.item else None,
+            "uom": row.uom,
+            "qty": flt(row.qty),
+            "amount": flt(row.amount),
+            "irpo_mr_pending_qty": flt(row.irpo_mr_pending_qty),
+            "irpo_po_pending_qty": flt(row.irpo_po_pending_qty),
+            "irpo_pr_qty": flt(row.irpo_pr_qty),
+            "irpo_pi_actual_qty": flt(row.irpo_pi_actual_qty),
+            "irpo_available_qty": flt(row.irpo_available_qty),
+        })
+    return updated_rows
+
+
+@frappe.whitelist()
+def save_irpo_task_unplanned_items(task_name, items_json):
+    """Replace the custom_irpo_unplanned_item child rows on a Task from the IRPO viewer.
+
+    ``items_json`` — JSON list of row dicts with keys:
+        name (optional, existing row ID), item, uom, qty
+
+    Mirrors save_irpo_task_items but for the Unplanned Items table. System-owned
+    fields (unplanned_row_ref, uom, tracked qty summaries) are preserved by the
+    validate_unplanned_rows Task hook when an existing row name is kept; rows
+    with ledger history cannot be removed (enforced by that same hook).
+    Existing rows not present in the payload are deleted.
+    New rows (no ``name``) are appended.
+    Returns the updated rows (same shape as get_irpo_task_detail).
+    """
+    if isinstance(items_json, str):
+        items_json = frappe.parse_json(items_json)
+
+    if not isinstance(items_json, list):
+        frappe.throw(_("items_json must be a list."))
+
+    task = frappe.get_doc("Task", task_name)
+
+    # Build a lookup of existing rows by name
+    existing_by_name = {r.name: r for r in task.get("custom_irpo_unplanned_item") or []}
+
+    # Rebuild the child table from the payload
+    task.set("custom_irpo_unplanned_item", [])
+    for row_data in items_json:
+        if not row_data.get("item"):
+            continue  # skip blank rows
+        row = task.append("custom_irpo_unplanned_item", {})
+        # Preserve the existing row name so Frappe updates in-place instead of deleting + re-creating
+        existing_row = existing_by_name.get(row_data.get("name"))
+        if existing_row:
+            row.name = existing_row.name
+        row.item = row_data.get("item") or ""
+        row.irpo_item_type = row_data.get("irpo_item_type") or ""
+        row.uom = row_data.get("uom") or ""
+        row.qty = flt(row_data.get("qty") or 0)
+        # Read-only / system-owned fields (unplanned_row_ref, tracked qty sums,
+        # irpo_available_qty) are restored by validate_unplanned_rows.
+
+    task.flags.ignore_permissions = True
+    task.save()
+    frappe.db.commit()
+
+    # Return the refreshed rows so the frontend can redraw
+    updated_rows = []
+    for row in task.get("custom_irpo_unplanned_item") or []:
+        updated_rows.append({
+            "name": row.name,
+            "unplanned_row_ref": row.unplanned_row_ref,
+            "irpo_item_type": row.irpo_item_type,
+            "item": row.item,
+            "item_name": frappe.db.get_value("Item", row.item, "item_name") if row.item else None,
+            "uom": row.uom,
+            "qty": flt(row.qty),
+            "irpo_mr_pending_qty": flt(row.irpo_mr_pending_qty),
+            "irpo_po_pending_qty": flt(row.irpo_po_pending_qty),
+            "irpo_pr_qty": flt(row.irpo_pr_qty),
+            "irpo_pi_actual_qty": flt(row.irpo_pi_actual_qty),
+            "irpo_available_qty": flt(row.irpo_available_qty),
+        })
+    return updated_rows
+
+
+# ---------------------------------------------------------------------
+# Break IRPO — create Leaf IRPO Tasks under a BOQ Node
+# ---------------------------------------------------------------------
+
+@frappe.whitelist()
+def break_into_leaf_irpos(boq_node_name, irpos_json):
+    """Create Leaf IRPO Tasks under the given BOQ Node Task.
+
+    ``boq_node_name`` — name of the BOQ Node Task (Group RPO row in the planner).
+    ``irpos_json``    — JSON list of row dicts with keys:
+        subject, cpc_uom, exp_start_date, exp_end_date,
+        account, cpc_budget_qty, cpc_budget_amount, color
+
+    Returns list of created Task names.
+    """
+    if isinstance(irpos_json, str):
+        irpos_json = frappe.parse_json(irpos_json)
+
+    if not irpos_json:
+        frappe.throw(_("Add at least one IRPO row."))
+
+    boq_node = frappe.get_doc("Task", boq_node_name)
+    if not boq_node:
+        frappe.throw(_("BOQ Node {0} not found.").format(boq_node_name))
+
+    boq_node_project = backfill_task_project(boq_node_name)
+    boq_node_sales_order = backfill_task_sales_order(boq_node_name)
+
+    created = []
+    for row in irpos_json:
+        if not row.get("subject"):
+            frappe.throw(_("Every IRPO row needs a Subject."))
+
+        irpo = frappe.new_doc("Task")
+        irpo.subject = row["subject"]
+        irpo.parent_task = boq_node_name
+        irpo.project = boq_node_project or boq_node.project or None
+        irpo.is_group = 0
+        irpo.cpc_node_type = "IRPO"
+        irpo.cpc_is_irpo = 1
+        irpo.cpc_contract = boq_node.cpc_contract
+        irpo.cpc_sales_order = boq_node_sales_order or boq_node.cpc_sales_order or None
+        irpo.cpc_boq_code = boq_node.cpc_boq_code
+        irpo.cpc_uom = row.get("cpc_uom") or "Percent"
+        irpo.exp_start_date = row.get("exp_start_date") or None
+        irpo.exp_end_date = row.get("exp_end_date") or None
+        irpo.cpc_budget_qty = flt(row.get("cpc_budget_qty") or 0)
+        irpo.cpc_budget_amount = flt(row.get("cpc_budget_amount") or 0)
+        irpo.account = row.get("account") or None
+        irpo.color = row.get("color") or None
+        irpo.insert(ignore_permissions=True)
+
+        created.append(irpo.name)
+
+    frappe.db.commit()
+
+    # Sync stored budget fields on the BOQ Node and all sibling IRPOs so the
+    # planner's "Remaining" column (read from cpc_boq_budget_remaining) reflects
+    # the newly allocated amounts straight away.
+    if boq_node.cpc_contract and boq_node.cpc_boq_code:
+        recompute_boq_budget_fields(boq_node.cpc_contract, boq_node.cpc_boq_code)
+
+    return created
+
+
+@frappe.whitelist()
+def get_irpos_for_boq_node(boq_node_name):
+    """Return all Leaf IRPO Tasks that are direct children of ``boq_node_name``.
+
+    Used by the Break IRPO dialog's "Get Previous IRPO" button so the user
+    can load and edit existing tasks instead of only creating new ones.
+    """
+    return frappe.get_all(
+        "Task",
+        filters={
+            "parent_task": boq_node_name,
+            "cpc_node_type": "IRPO",
+            "docstatus": ["<", 2],
+        },
+        fields=[
+            "name",
+            "subject",
+            "cpc_uom",
+            "exp_start_date",
+            "exp_end_date",
+            "account",
+            "cpc_budget_qty",
+            "cpc_budget_amount",
+            "color",
+        ],
+        order_by="creation asc",
+    )
+
+
+@frappe.whitelist()
+def save_irpo_tasks(boq_node_name, irpos_json, boq_node_color=None):
+    """Create or update Leaf IRPO Tasks under the given BOQ Node Task.
+
+    ``boq_node_name``  — name of the BOQ Node Task.
+    ``irpos_json``     — JSON list of row dicts with optional ``name`` key.
+    ``boq_node_color`` — hex color to set on the BOQ Node Task itself
+                         (shown in the Gantt chart group bar).
+
+    Rows with a ``name`` field that exists are updated in-place.
+    Rows without one (or with a non-existent name) are created new.
+    Returns ``{created: [...], updated: [...]}``.
+    """
+    if isinstance(irpos_json, str):
+        irpos_json = frappe.parse_json(irpos_json)
+
+    if not irpos_json:
+        frappe.throw(_("Add at least one IRPO row."))
+
+    boq_node = frappe.get_doc("Task", boq_node_name)
+    if not boq_node:
+        frappe.throw(_("BOQ Node {0} not found.").format(boq_node_name))
+
+    # Resolve the Project and Sales Order once for the whole break operation and
+    # heal the BOQ Node itself, so every IRPO child created below inherits them.
+    boq_node_project = backfill_task_project(boq_node_name)
+    boq_node_sales_order = backfill_task_sales_order(boq_node_name)
+
+    created = []
+    updated = []
+
+    for row in irpos_json:
+        if not row.get("subject"):
+            frappe.throw(_("Every IRPO row needs a Subject."))
+
+        task_name = row.get("name")
+
+        if task_name and frappe.db.exists("Task", task_name):
+            values = {
+                "subject": row["subject"],
+                "cpc_uom": row.get("cpc_uom") or "Percent",
+                "exp_start_date": row.get("exp_start_date") or None,
+                "exp_end_date": row.get("exp_end_date") or None,
+                "account": row.get("account") or None,
+                "cpc_budget_qty": flt(row.get("cpc_budget_qty") or 0),
+                "cpc_budget_amount": flt(row.get("cpc_budget_amount") or 0),
+                "color": row.get("color") or None,
+            }
+            # Only fill these in when still blank — never overwrite a value that
+            # was set deliberately.
+            if not frappe.db.get_value("Task", task_name, "project"):
+                existing_project = backfill_task_project(task_name)
+                values["project"] = existing_project or boq_node_project or None
+
+            if not frappe.db.get_value("Task", task_name, "cpc_sales_order"):
+                existing_so = backfill_task_sales_order(task_name)
+                values["cpc_sales_order"] = existing_so or boq_node_sales_order or None
+
+            frappe.db.set_value(
+                "Task",
+                task_name,
+                values,
+                update_modified=True,
+            )
+            updated.append(task_name)
+        else:
+            irpo = frappe.new_doc("Task")
+            irpo.subject = row["subject"]
+            irpo.parent_task = boq_node_name
+            irpo.project = boq_node_project or boq_node.project or None
+            irpo.is_group = 0
+            irpo.cpc_node_type = "IRPO"
+            irpo.cpc_is_irpo = 1
+            irpo.cpc_contract = boq_node.cpc_contract
+            irpo.cpc_sales_order = boq_node_sales_order or boq_node.cpc_sales_order or None
+            irpo.cpc_boq_code = boq_node.cpc_boq_code
+            irpo.cpc_uom = row.get("cpc_uom") or "Percent"
+            irpo.exp_start_date = row.get("exp_start_date") or None
+            irpo.exp_end_date = row.get("exp_end_date") or None
+            irpo.cpc_budget_qty = flt(row.get("cpc_budget_qty") or 0)
+            irpo.cpc_budget_amount = flt(row.get("cpc_budget_amount") or 0)
+            irpo.account = row.get("account") or None
+            irpo.color = row.get("color") or None
+            irpo.insert(ignore_permissions=True)
+            created.append(irpo.name)
+
+    frappe.db.commit()
+
+    # Apply the chosen color to the BOQ Node Task (Gantt group bar).
+    if boq_node_color:
+        frappe.db.set_value("Task", boq_node_name, "color", boq_node_color, update_modified=False)
+        frappe.db.commit()
+
+    # Sync budget totals on the BOQ Node so the planner Remaining column is accurate.
+    if boq_node.cpc_contract and boq_node.cpc_boq_code:
+        recompute_boq_budget_fields(boq_node.cpc_contract, boq_node.cpc_boq_code)
+
+    return {"created": created, "updated": updated}
+
+
+@frappe.whitelist()
+def cpc_make_irpo_import_workbook(rows_json):
+    """Build an .xlsx workbook from the Break IRPO dialog rows.
+
+    ``rows_json`` — JSON list of row dicts (subject, cpc_uom, exp_start_date,
+    exp_end_date, account, cpc_budget_qty, cpc_budget_amount, color).
+
+    Returns ``{"b64": <base64 xlsx>, "filename": ...}`` for client download.
+    """
+    import base64
+
+    from frappe.utils.xlsxutils import make_xlsx
+
+    rows = frappe.parse_json(rows_json) if isinstance(rows_json, str) else rows_json
+    header = [
+        "Subject",
+        "UOM",
+        "Planned Start",
+        "Planned End",
+        "Account",
+        "Budget Qty",
+        "Budget Amount",
+        "Color",
+    ]
+    data = [header]
+    for r in rows or []:
+        data.append([
+            r.get("subject") or "",
+            r.get("cpc_uom") or "",
+            r.get("exp_start_date") or "",
+            r.get("exp_end_date") or "",
+            r.get("account") or "",
+            flt(r.get("cpc_budget_qty")),
+            flt(r.get("cpc_budget_amount")),
+            r.get("color") or "",
+        ])
+    xlsx_file = make_xlsx(data, "IRPO Tasks", column_widths=[50, 12, 14, 14, 50, 12, 14, 12])
+    return {
+        "b64": base64.b64encode(xlsx_file.getvalue()).decode("utf-8"),
+        "filename": "IRPO_Tasks.xlsx",
+    }
+
+
+@frappe.whitelist()
+def cpc_parse_irpo_import_file(file_url):
+    """Read an uploaded .xlsx and return its rows keyed by column name.
+
+    The header row is matched case-insensitively against the workbook written
+    by ``cpc_make_irpo_import_workbook`` so a downloaded file round-trips.
+    """
+    from datetime import date, datetime
+
+    from frappe.utils.xlsxutils import read_xlsx_file_from_attached_file
+
+    raw = read_xlsx_file_from_attached_file(file_url=file_url) or []
+    if not raw:
+        return []
+
+    header = raw[0]
+    col = {}
+    for idx, cell in enumerate(header or []):
+        if cell is not None:
+            key = str(cell).strip().lower()
+            col.setdefault(key, idx)
+
+    def cell_of(row, key, is_date=False):
+        idx = col.get(key)
+        if idx is None or idx >= len(row):
+            return None
+        value = row[idx]
+        if value is None:
+            return None
+        if is_date:
+            if isinstance(value, (date, datetime)):
+                return value.strftime("%Y-%m-%d")
+            text = str(value).strip()
+            return text or None
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    result = []
+    for row in raw[1:]:
+        if not any(c is not None and str(c).strip() for c in row):
+            continue
+        result.append({
+            "subject": cell_of(row, "subject"),
+            "uom": cell_of(row, "uom"),
+            "exp_start_date": cell_of(row, "planned start", is_date=True),
+            "exp_end_date": cell_of(row, "planned end", is_date=True),
+            "account": cell_of(row, "account"),
+            "cpc_budget_qty": cell_of(row, "budget qty"),
+            "cpc_budget_amount": cell_of(row, "budget amount"),
+            "color": cell_of(row, "color"),
+        })
+    return result
+
+
+# ---------------------------------------------------------------------
+# IRPO Planner — data API
+# ---------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_planner_filters(cpc_contract=None):
+    """Return the master-data values used to populate the planner dropdowns.
+
+    Contract / Project / Sales Order options are sourced from Construction
+    Contract and Sales Order records (not from Task rows), because Task rows
+    do not always carry ``project`` / ``cpc_sales_order`` populated.
+
+    When ``cpc_contract`` is given the Project and Sales Order options are
+    scoped to that contract, so the planner only offers related records.
+    """
+    contracts = frappe.get_all(
+        "Construction Contract",
+        fields=["name", "project"],
+        order_by="name desc",
+    )
+
+    if cpc_contract:
+        contract_project = frappe.get_value("Construction Contract", cpc_contract, "project")
+        sales_orders = frappe.get_all(
+            "Sales Order",
+            filters={"docstatus": 1, "cpc_contract": cpc_contract},
+            fields=["name", "project", "cpc_contract"],
+            order_by="name desc",
+        )
+        projects = []
+        if contract_project:
+            projects.append(contract_project)
+        for so in sales_orders:
+            if so.project and so.project not in projects:
+                projects.append(so.project)
+        return {
+            "contracts": [c.name for c in contracts],
+            "projects": projects,
+            "sales_orders": [
+                {
+                    "name": so.name,
+                    "project": so.project,
+                    "cpc_contract": so.cpc_contract,
+                }
+                for so in sales_orders
+            ],
+        }
+
+    sales_orders = frappe.get_all(
+        "Sales Order",
+        filters={"docstatus": 1, "cpc_contract": ["is", "set"]},
+        fields=["name", "project", "cpc_contract"],
+        order_by="name desc",
+    )
+    projects = []
+    seen_projects = set()
+    for c in contracts:
+        if c.project and c.project not in seen_projects:
+            seen_projects.add(c.project)
+            projects.append(c.project)
+    for so in sales_orders:
+        if so.project and so.project not in seen_projects:
+            seen_projects.add(so.project)
+            projects.append(so.project)
+
+    return {
+        "contracts": [c.name for c in contracts],
+        "projects": projects,
+        "sales_orders": [
+            {
+                "name": so.name,
+                "project": so.project,
+                "cpc_contract": so.cpc_contract,
+            }
+            for so in sales_orders
+        ],
+    }
+
+
+@frappe.whitelist()
+def get_planner_data(cpc_contract=None, project=None, sales_order=None):
+    """Return a flat list of all BOQ Nodes and IRPOs for the planner UI.
+
+    Each row contains the fields needed to render both the WBS tree table and
+    the Schedule Timeline (Gantt) panel.  Predecessor task names are returned
+    as a comma-joined string so the JS can parse them without extra round-trips.
+
+    Filters are resolved through master data because Task rows do not reliably
+    carry ``project`` or ``cpc_sales_order``: Sales Orders map to a contract
+    (and a project), Construction Contracts map to a project.
+    """
+    filters = {"docstatus": ["<", 2], "cpc_contract": ["is", "set"]}
+    if cpc_contract:
+        # A sales order wins over a project; both give a concrete contract.
+        contract = cpc_contract
+        if sales_order:
+            so_contract = frappe.get_value("Sales Order", sales_order, "cpc_contract")
+            if so_contract:
+                contract = so_contract
+        filters["cpc_contract"] = contract
+    elif sales_order:
+        so_contract = frappe.get_value("Sales Order", sales_order, "cpc_contract")
+        if so_contract:
+            filters["cpc_contract"] = so_contract
+        else:
+            filters["cpc_contract"] = ["is", "set"]
+            filters["cpc_sales_order"] = sales_order
+    elif project:
+        contracts = frappe.get_all(
+            "Construction Contract",
+            filters={"project": project},
+            pluck="name",
+        )
+        if contracts:
+            filters["cpc_contract"] = ["in", contracts]
+        else:
+            filters["cpc_contract"] = ["is", "set"]
+            filters["project"] = project
+
+    tasks = frappe.get_all(
+        "Task",
+        filters=filters,
+        fields=[
+            "name",
+            "subject",
+            "project",
+            "cpc_node_type",
+            "parent_task",
+            "is_group",
+            "cpc_uom",
+            "cpc_budget_qty",
+            "cpc_budget_amount",
+            "cpc_boq_cost_budget",
+            "cpc_boq_budget_allocated",
+            "cpc_boq_budget_remaining",
+            "progress",
+            "exp_start_date",
+            "exp_end_date",
+            "cpc_sales_order",
+            "cpc_contract",
+            "cpc_boq_code",
+            "cpc_irpo_code",
+            "status",
+            "color",
+        ],
+        order_by="cpc_node_type asc, creation asc",
+    )
+
+    if not tasks:
+        return []
+
+    # Fetch predecessor links for all tasks in one query
+    task_names = [t.name for t in tasks]
+    placeholders = ", ".join(["%s"] * len(task_names))
+    deps_rows = frappe.db.sql(
+        f"""
+        SELECT parent, task AS predecessor
+        FROM `tabTask Depends On`
+        WHERE parent IN ({placeholders})
+        """,
+        tuple(task_names),
+        as_dict=True,
+    )
+    deps_map = {}
+    for dep in deps_rows:
+        deps_map.setdefault(dep.parent, []).append(dep.predecessor)
+
+    result = []
+    for task in tasks:
+        row = task.copy() if isinstance(task, dict) else dict(task)
+        row["depends_on_tasks"] = ", ".join(deps_map.get(task.name, []))
+        # Compute consumed percentage from progress field (0–100)
+        row["consumed_pct"] = flt(task.progress or 0)
+        result.append(row)
+
+    # ----------------------------------------------------------------
+    # Live-recompute budget figures for BOQ Node rows.
+    # The stored cpc_boq_budget_remaining / cpc_boq_budget_allocated
+    # fields can be stale (e.g. IRPOs created via the planner's
+    # break_into_leaf_irpos before this fix, or via the SO dialog when
+    # recompute was skipped). Fetching the live sum in one query and
+    # patching the rows here means the planner always shows accurate
+    # "Remaining" values without a separate API call.
+    # ----------------------------------------------------------------
+    boq_nodes = [r for r in result if r.get("cpc_node_type") == "BOQ Node"]
+    if boq_nodes:
+        # Build a (contract, boq_code) → allocated map from one SQL pass.
+        contract_boq_pairs = list({
+            (r["cpc_contract"], r["cpc_boq_code"])
+            for r in boq_nodes
+            if r.get("cpc_contract") and r.get("cpc_boq_code")
+        })
+        if contract_boq_pairs:
+            pair_placeholders = ", ".join(["(%s, %s)"] * len(contract_boq_pairs))
+            flat_params = [v for pair in contract_boq_pairs for v in pair]
+            allocated_rows = frappe.db.sql(
+                f"""
+                SELECT cpc_contract, cpc_boq_code, COALESCE(SUM(cpc_budget_amount), 0) AS allocated
+                FROM `tabTask`
+                WHERE (cpc_contract, cpc_boq_code) IN ({pair_placeholders})
+                  AND cpc_node_type = 'IRPO'
+                  AND docstatus < 2
+                GROUP BY cpc_contract, cpc_boq_code
+                """,
+                tuple(flat_params),
+                as_dict=True,
+            )
+            allocated_map = {
+                (r.cpc_contract, r.cpc_boq_code): flt(r.allocated)
+                for r in allocated_rows
+            }
+            for row in boq_nodes:
+                key = (row.get("cpc_contract"), row.get("cpc_boq_code"))
+                live_allocated = allocated_map.get(key, 0.0)
+                budget = flt(row.get("cpc_boq_cost_budget") or 0)
+                row["cpc_boq_budget_allocated"] = live_allocated
+                row["cpc_boq_budget_remaining"] = budget - live_allocated
+
+    return result
+
+
+@frappe.whitelist()
+def save_planner_dates(tasks_json):
+    """Batch-update exp_start_date (and exp_end_date) on Task records.
+
+    ``tasks_json`` is a JSON-serialised list of objects:
+      [{"name": "TASK-0001", "exp_start_date": "2026-09-20", "exp_end_date": "2026-10-05"}, ...]
+    """
+    if isinstance(tasks_json, str):
+        tasks_json = frappe.parse_json(tasks_json)
+
+    if not tasks_json:
+        return {"updated": 0}
+
+    updated = 0
+    for row in tasks_json:
+        name = row.get("name")
+        if not name:
+            continue
+        frappe.db.set_value(
+            "Task",
+            name,
+            {
+                "exp_start_date": row.get("exp_start_date") or None,
+                "exp_end_date": row.get("exp_end_date") or None,
+            },
+            update_modified=False,
+        )
+        updated += 1
+
+    frappe.db.commit()
+    return {"updated": updated}

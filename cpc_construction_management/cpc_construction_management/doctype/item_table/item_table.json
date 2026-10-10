@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-31 10:10:15.039680",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "irpo_budget_row_ref",
+  "item",
+  "uom",
+  "item_name",
+  "irpo_item_type",
+  "column_break_fhme",
+  "qty",
+  "amount",
+  "irpo_mr_pending_qty",
+  "irpo_po_pending_qty",
+  "irpo_pr_qty",
+  "irpo_pi_actual_qty",
+  "irpo_available_qty"
+ ],
+ "fields": [
+  {
+   "fieldname": "irpo_budget_row_ref",
+   "fieldtype": "Data",
+   "label": "IRPO Budget Row Ref",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item.stock_uom",
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_fhme",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "QTY",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount"
+  },
+  {
+   "fieldname": "irpo_mr_pending_qty",
+   "fieldtype": "Float",
+   "label": "IRPO MR Pending Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_po_pending_qty",
+   "fieldtype": "Float",
+   "label": "IRPO PO Pending Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_pr_qty",
+   "fieldtype": "Float",
+   "label": "IRPO PR Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_pi_actual_qty",
+   "fieldtype": "Float",
+   "label": "IRPO PI / Actual Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_available_qty",
+   "fieldtype": "Float",
+   "label": "IRPO Available Qty",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "item.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_item_type",
+   "fieldtype": "Link",
+   "label": "Irpo Item Type",
+   "options": "IRPO Item Type"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-05 11:05:16.276393",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "Item Table",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

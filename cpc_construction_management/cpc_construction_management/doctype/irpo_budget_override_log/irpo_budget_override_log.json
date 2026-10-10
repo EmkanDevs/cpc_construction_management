@@ -1,0 +1,227 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-26 13:37:14.900604",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_source",
+  "irpo",
+  "project",
+  "column_break_ovr_1",
+  "voucher_type",
+  "voucher_no",
+  "voucher_detail_no",
+  "section_check",
+  "check_type",
+  "action",
+  "column_break_ovr_2",
+  "budget_qty",
+  "after_qty",
+  "over_qty",
+  "column_break_ovr_3",
+  "budget_amount",
+  "after_amount",
+  "over_amount",
+  "section_override_by",
+  "override_by",
+  "override_role",
+  "column_break_ovr_4",
+  "override_on",
+  "section_remarks",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_source",
+   "fieldtype": "Section Break",
+   "label": "IRPO / Source Voucher"
+  },
+  {
+   "fieldname": "irpo",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "IRPO",
+   "options": "Task",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ovr_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "voucher_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Voucher Type",
+   "options": "DocType",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Voucher No",
+   "options": "voucher_type",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "voucher_detail_no",
+   "fieldtype": "Data",
+   "label": "Voucher Detail No (Row)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_check",
+   "fieldtype": "Section Break",
+   "label": "Check Details"
+  },
+  {
+   "fieldname": "check_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Check Type",
+   "options": "Quantity\nAmount",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Action Overridden",
+   "options": "Stop",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ovr_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "budget_qty",
+   "fieldtype": "Float",
+   "label": "Budget Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "after_qty",
+   "fieldtype": "Float",
+   "label": "Qty After Transaction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "over_qty",
+   "fieldtype": "Float",
+   "label": "Over By (Qty)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ovr_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "budget_amount",
+   "fieldtype": "Currency",
+   "label": "Budget Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "after_amount",
+   "fieldtype": "Currency",
+   "label": "Amount After Transaction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "over_amount",
+   "fieldtype": "Currency",
+   "label": "Over By (Amount)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_override_by",
+   "fieldtype": "Section Break",
+   "label": "Override Authorization"
+  },
+  {
+   "fieldname": "override_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Override By",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "override_role",
+   "fieldtype": "Link",
+   "label": "Override Role Used",
+   "options": "Role",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ovr_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "override_on",
+   "fieldtype": "Datetime",
+   "label": "Override On",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_remarks",
+   "fieldtype": "Section Break",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks / Justification"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-26 13:37:14.900604",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "IRPO Budget Override Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

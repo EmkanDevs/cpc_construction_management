@@ -1,0 +1,392 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:IRPO-QTY-{MM}-{YYYY}-{#####}",
+ "creation": "2026-08-26 12:38:11.928849",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_irpo",
+  "irpo",
+  "irpo_budget_row_ref",
+  "irpo_unplanned_row_ref",
+  "item",
+  "item_name",
+  "irpo_item_type",
+  "project",
+  "boq_code",
+  "company",
+  "column_break_ledger_1",
+  "posting_date",
+  "stage",
+  "created_from_stage",
+  "is_unplanned",
+  "section_voucher",
+  "voucher_type",
+  "voucher_no",
+  "voucher_detail_no",
+  "column_break_ledger_2",
+  "reversal_of",
+  "is_cancelled",
+  "section_qty",
+  "qty",
+  "uom",
+  "column_break_ledger_3",
+  "transaction_qty",
+  "transaction_uom",
+  "conversion_factor",
+  "section_revision",
+  "event_type",
+  "revision_no",
+  "column_break_revision_1",
+  "budget_qty_before",
+  "budget_qty_after",
+  "column_break_revision_2",
+  "mr_pending_qty_after",
+  "po_pending_qty_after",
+  "pr_qty_after",
+  "pi_actual_qty_after",
+  "column_break_revision_3",
+  "irpo_available_qty_before",
+  "irpo_available_qty",
+  "section_notes",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_irpo",
+   "fieldtype": "Section Break",
+   "label": "IRPO"
+  },
+  {
+   "bold": 1,
+   "fieldname": "irpo",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "IRPO",
+   "options": "Task",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "irpo_budget_row_ref",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "IRPO Budget Row Ref",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_unplanned_row_ref",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "IRPO Unplanned Row Ref",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item",
+   "options": "Item",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_item_type",
+   "fieldtype": "Data",
+   "label": "IRPO Item Type ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "boq_code",
+   "fieldtype": "Data",
+   "label": "BOQ Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ledger_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Stage",
+   "options": "MR Pending\nPO Pending\nPR\nPI Actual\nIRPO Available",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "created_from_stage",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Created From Stage",
+   "options": "MR\nPO\nPR\nPI\nJournal\nManual Adjustment\nBudget Revision",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_unplanned",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Is Unplanned",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_voucher",
+   "fieldtype": "Section Break",
+   "label": "Source Voucher"
+  },
+  {
+   "fieldname": "voucher_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Voucher Type",
+   "options": "DocType",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Voucher No",
+   "options": "voucher_type",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "voucher_detail_no",
+   "fieldtype": "Data",
+   "label": "Voucher Detail No (Row)",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ledger_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reversal_of",
+   "fieldtype": "Link",
+   "label": "Reversal Of",
+   "options": "IRPO Quantity Ledger",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_cancelled",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Is Cancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_qty",
+   "fieldtype": "Section Break",
+   "label": "Quantity"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty (IRPO UOM, signed)",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ledger_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "transaction_qty",
+   "fieldtype": "Float",
+   "label": "Transaction Qty (as entered)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transaction_uom",
+   "fieldtype": "Link",
+   "label": "Transaction UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "label": "Conversion Factor (txn UOM -> IRPO UOM)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_revision",
+   "fieldtype": "Section Break",
+   "label": "Revision / Event Detail"
+  },
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Event Type",
+   "options": "\nMR Submit\nPO Submit\nPR Submit\nPI Submit\nCancel\nBudget Revision",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_no",
+   "fieldtype": "Int",
+   "label": "Revision No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_revision_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "budget_qty_before",
+   "fieldtype": "Float",
+   "label": "Budget Qty Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "budget_qty_after",
+   "fieldtype": "Float",
+   "label": "Budget Qty After",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_revision_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mr_pending_qty_after",
+   "fieldtype": "Float",
+   "label": "MR Pending Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "po_pending_qty_after",
+   "fieldtype": "Float",
+   "label": "PO Pending Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pr_qty_after",
+   "fieldtype": "Float",
+   "label": "PR Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pi_actual_qty_after",
+   "fieldtype": "Float",
+   "label": "PI Actual Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_revision_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "irpo_available_qty_before",
+   "fieldtype": "Float",
+   "label": "IRPO Available Qty Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "irpo_available_qty",
+   "fieldtype": "Float",
+   "label": "IRPO Available Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_notes",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-06 14:48:31.733453",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "IRPO Quantity Ledger",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-17 18:16:17.219649",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "boq_code",
+  "description",
+  "uom",
+  "column_break_1",
+  "qty",
+  "rate",
+  "amount",
+  "column_break_2",
+  "cost_budget",
+  "margin",
+  "item_code"
+ ],
+ "fields": [
+  {
+   "fieldname": "boq_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "BOQ Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Work Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UoM",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount (Value)",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cost_budget",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Cost Budget",
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "margin",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Margin",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "description": "Filled by \"Create Item Master\"; locked once set.",
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-18 11:02:51.571977",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "Contract BOQ Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,376 @@
+# # Copyright (c) 2026, info@finbyz.tech and contributors
+# # For license information, please see license.txt
+
+
+# import frappe
+# from frappe import _
+# from frappe.model.document import Document
+# from frappe.utils import flt
+
+# # Role that is allowed to submit a contract even when a BOQ line has
+# # no margin (cost_budget >= amount). Create this role in the site if
+# # the override behaviour described in US-01 is required.
+# MARGIN_OVERRIDE_ROLE = "CPC Contract Margin Override"
+
+# ITEM_GROUP = "Construction BOQ"
+
+
+# class ConstructionContract(Document):
+# 	# ------------------------------------------------------------------
+# 	# Validation / rollups
+# 	# ------------------------------------------------------------------
+# 	def validate(self):
+# 		self.calculate_boq_totals()
+# 		self.validate_unique_boq_codes()
+
+# 	def calculate_boq_totals(self):
+# 		base_value = 0.0
+# 		total_cost_budget = 0.0
+
+# 		for row in self.boq_items:
+# 			row.amount = flt(row.qty) * flt(row.rate)
+# 			row.margin = flt(row.amount) - flt(row.cost_budget)
+
+# 			base_value += flt(row.amount)
+# 			total_cost_budget += flt(row.cost_budget)
+
+# 		self.base_value = base_value
+# 		self.total_cost_budget = total_cost_budget
+# 		self.target_margin = flt(base_value) - flt(total_cost_budget)
+
+# 	def validate_unique_boq_codes(self):
+# 		seen = {}
+# 		for row in self.boq_items:
+# 			if not row.boq_code:
+# 				continue
+# 			if row.boq_code in seen:
+# 				frappe.throw(
+# 					_("BOQ Code {0} is used on rows {1} and {2}. BOQ Code must be unique within the contract.").format(
+# 						frappe.bold(row.boq_code), seen[row.boq_code], row.idx
+# 					)
+# 				)
+# 			seen[row.boq_code] = row.idx
+
+# 	def before_submit(self):
+# 		if not self.boq_items:
+# 			frappe.throw(_("Cannot submit a Construction Contract with no BOQ lines."))
+
+# 		zero_margin_rows = [
+# 			row.boq_code for row in self.boq_items if flt(row.cost_budget) >= flt(row.amount)
+# 		]
+# 		if zero_margin_rows and not self._has_margin_override():
+# 			frappe.throw(
+# 				_("No margin on {0}. Ask a user with the {1} role to override and submit.").format(
+# 					", ".join(frappe.bold(code) for code in zero_margin_rows),
+# 					frappe.bold(MARGIN_OVERRIDE_ROLE),
+# 				)
+# 			)
+
+# 	def _has_margin_override(self):
+# 		return MARGIN_OVERRIDE_ROLE in frappe.get_roles(frappe.session.user)
+
+# 	# ------------------------------------------------------------------
+# 	# Submit-time automation
+# 	# ------------------------------------------------------------------
+# 	def on_submit(self):
+# 		self.push_boq_to_item_master()
+# 		self.create_project()
+
+# 	# ------------------------------------------------------------------
+# 	# US-02: push BOQ lines to Item Master
+# 	# ------------------------------------------------------------------
+# 	@frappe.whitelist()
+# 	def create_item_master(self):
+# 		"""Button handler: 'Create Item Master' — visible in Draft, also
+# 		runs automatically on submit. Idempotent: rows that already have
+# 		an item_code are skipped."""
+# 		self.push_boq_to_item_master()
+# 		self.save()
+# 		return {"created": True}
+
+# 	def push_boq_to_item_master(self):
+# 		self.ensure_item_group()
+# 		touched = False
+
+# 		for row in self.boq_items:
+# 			if row.item_code:
+# 				# already linked/created earlier — never touch again
+# 				continue
+
+# 			item_code = f"{self.name}-{row.boq_code}"
+
+# 			if not frappe.db.exists("Item", item_code):
+# 				item = frappe.new_doc("Item")
+# 				item.item_code = item_code
+# 				item.item_name = (row.description or item_code)[:140]
+# 				item.item_group = ITEM_GROUP
+# 				item.stock_uom = row.uom
+# 				item.is_stock_item = 0
+# 				item.is_sales_item = 1
+# 				item.is_purchase_item = 0
+# 				item.standard_rate = row.rate
+# 				item.cpc_is_boq_item = 1
+# 				item.cpc_source_contract = self.name
+# 				item.cpc_boq_code = row.boq_code
+# 				item.insert(ignore_permissions=True)
+
+# 			row.item_code = item_code
+# 			touched = True
+
+# 		if touched:
+# 			# write item_code back without re-triggering full validate/submit flow
+# 			for row in self.boq_items:
+# 				frappe.db.set_value("Contract BOQ Item", row.name, "item_code", row.item_code)
+
+# 	def ensure_item_group(self):
+# 		if frappe.db.exists("Item Group", ITEM_GROUP):
+# 			return
+# 		parent = frappe.db.get_value("Item Group", {"is_group": 1, "parent_item_group": ""}, "name")
+# 		ig = frappe.new_doc("Item Group")
+# 		ig.item_group_name = ITEM_GROUP
+# 		ig.parent_item_group = parent or "All Item Groups"
+# 		ig.insert(ignore_permissions=True)
+
+# 	# ------------------------------------------------------------------
+# 	# US-03: 1:1 Project auto-creation
+# 	# ------------------------------------------------------------------
+# 	def create_project(self):
+# 		if self.project:
+# 			return  # idempotent — never create a second Project
+
+# 		project = frappe.new_doc("Project")
+# 		project.project_name = self.contract_title
+# 		project.customer = self.customer
+# 		project.company = self.company
+# 		project.currency = self.currency
+# 		project.expected_start_date = self.start_date
+# 		project.expected_end_date = self.end_date
+# 		project.cpc_source_contract = self.name
+# 		project.cpc_ownership = self.ownership
+# 		project.cpc_contract_value = self.base_value
+# 		project.cpc_cost_budget = self.total_cost_budget
+# 		project.cpc_target_margin = self.target_margin
+# 		project.insert(ignore_permissions=True)
+
+# 		# mirror the contract's number: CT-2026-0051 -> PRJ-2026-0051
+# 		mirrored_name = self.name.replace("CT-", "PRJ-", 1) if self.name.startswith("CT-") else None
+# 		if mirrored_name and mirrored_name != project.name and not frappe.db.exists("Project", mirrored_name):
+# 			frappe.rename_doc("Project", project.name, mirrored_name, force=True)
+# 			project.name = mirrored_name
+
+# 		self.db_set("project", project.name, update_modified=False)
+
+
+
+
+
+
+
+
+# Copyright (c) 2026, CPC and contributors
+# For license information, please see license.txt
+
+import frappe
+from frappe import _
+from frappe.model.document import Document
+from frappe.utils import flt, getdate
+
+# Role that is allowed to submit a contract even when a BOQ line has
+# no margin (cost_budget >= amount). Create this role in the site if
+# the override behaviour described in US-01 is required.
+MARGIN_OVERRIDE_ROLE = "CPC Contract Margin Override"
+
+ITEM_GROUP = "Construction BOQ"
+
+
+class ConstructionContract(Document):
+	# ------------------------------------------------------------------
+	# Validation / rollups
+	# ------------------------------------------------------------------
+	def validate(self):
+		self.calculate_boq_totals()
+		self.validate_unique_boq_codes()
+
+	def calculate_boq_totals(self):
+		"""base_value = Σ of all BOQ lines.
+		change_order_value / revised_value are kept as fields for when the
+		change-order flow comes back, but with the is_change_order checkbox
+		removed from Contract BOQ Item for now, every line counts toward
+		base_value and change_order_value stays 0 (revised_value == base_value).
+		target_margin_percent expresses target_margin as a % of base_value,
+		so users can read margin as an amount and a rate side by side."""
+		base_value = 0.0
+		total_cost_budget = 0.0
+
+		for row in self.boq_items:
+			row.amount = flt(row.qty) * flt(row.rate)
+			row.margin = flt(row.amount) - flt(row.cost_budget)
+
+			base_value += flt(row.amount)
+			total_cost_budget += flt(row.cost_budget)
+
+		self.base_value = base_value
+		self.change_order_value = 0.0
+		self.revised_value = base_value
+		self.total_cost_budget = total_cost_budget
+		self.target_margin = flt(self.base_value) - flt(total_cost_budget)
+		self.target_margin_percent = (
+			(self.target_margin / self.base_value) * 100 if self.base_value else 0.0
+		)
+
+	def validate_unique_boq_codes(self):
+		seen = {}
+		for row in self.boq_items:
+			if not row.boq_code:
+				continue
+			if row.boq_code in seen:
+				frappe.throw(
+					_("BOQ Code {0} is used on rows {1} and {2}. BOQ Code must be unique within the contract.").format(
+						frappe.bold(row.boq_code), seen[row.boq_code], row.idx
+					)
+				)
+			seen[row.boq_code] = row.idx
+
+	def before_submit(self):
+		if not self.boq_items:
+			frappe.throw(_("Cannot submit a Construction Contract with no BOQ lines."))
+
+		zero_margin_rows = [
+			row.boq_code for row in self.boq_items if flt(row.cost_budget) >= flt(row.amount)
+		]
+		if zero_margin_rows and not self._has_margin_override():
+			frappe.throw(
+				_("No margin on {0}. Ask a user with the {1} role to override and submit.").format(
+					", ".join(frappe.bold(code) for code in zero_margin_rows),
+					frappe.bold(MARGIN_OVERRIDE_ROLE),
+				)
+			)
+
+	def _has_margin_override(self):
+		return MARGIN_OVERRIDE_ROLE in frappe.get_roles(frappe.session.user)
+
+	# ------------------------------------------------------------------
+	# Submit-time automation
+	# ------------------------------------------------------------------
+	def on_submit(self):
+		self.push_boq_to_item_master()
+		self.create_project()
+
+	# ------------------------------------------------------------------
+	# US-02: push BOQ lines to Item Master
+	# ------------------------------------------------------------------
+	@frappe.whitelist()
+	def create_item_master(self):
+		"""Button handler: 'Create Item Master' — visible in Draft, also
+		runs automatically on submit. Idempotent: rows that already have
+		an item_code are skipped."""
+		self.push_boq_to_item_master()
+		self.save()
+		return {"created": True}
+
+	def push_boq_to_item_master(self):
+		self.ensure_item_group()
+		touched = False
+
+		for row in self.boq_items:
+			if row.item_code:
+				# already linked/created earlier — never touch again
+				continue
+
+			item_code = f"{self.name}-{row.boq_code}"
+
+			if not frappe.db.exists("Item", item_code):
+				item = frappe.new_doc("Item")
+				item.item_code = item_code
+				item.item_name = (row.description or item_code)[:140]
+				item.item_group = ITEM_GROUP
+				item.stock_uom = row.uom
+				item.is_stock_item = 0
+				item.is_sales_item = 1
+				item.is_purchase_item = 0
+				item.standard_rate = row.rate
+				item.cpc_is_boq_item = 1
+				item.cpc_source_contract = self.name
+				item.cpc_boq_code = row.boq_code
+				item.insert(ignore_permissions=True)
+
+			row.item_code = item_code
+			touched = True
+
+		if touched:
+			# write item_code back without re-triggering full validate/submit flow
+			for row in self.boq_items:
+				frappe.db.set_value("Contract BOQ Item", row.name, "item_code", row.item_code)
+
+	def ensure_item_group(self):
+		if frappe.db.exists("Item Group", ITEM_GROUP):
+			return
+		parent = frappe.db.get_value("Item Group", {"is_group": 1, "parent_item_group": ""}, "name")
+		ig = frappe.new_doc("Item Group")
+		ig.item_group_name = ITEM_GROUP
+		ig.parent_item_group = parent or "All Item Groups"
+		self._fill_required_custom_fields(ig)
+		ig.insert(ignore_permissions=True)
+
+	def _fill_required_custom_fields(self, doc, reference_date=None):
+		"""Some sites add mandatory custom fields to standard doctypes (e.g. a
+		"Group Code" field on Item Group, or a "Start Year" field on Project,
+		via another installed app on the bench). Rather than fail blind on
+		insert(), fill any still-empty mandatory field with a sensible default
+		so auto-creation doesn't break on sites with extra required fields we
+		don't know about. A field whose label/name mentions "year" is filled
+		from reference_date (e.g. the contract's start_date) when one is
+		given, since that's an actually-meaningful value rather than a
+		placeholder. Review the value chosen here if your site's field
+		expects a specific format (e.g. a coded naming convention)."""
+		meta = frappe.get_meta(doc.doctype)
+		for df in meta.fields:
+			if not df.reqd or doc.get(df.fieldname):
+				continue
+
+			is_year_field = "year" in (df.fieldname or "").lower() or "year" in (df.label or "").lower()
+			if is_year_field and reference_date:
+				year_value = getdate(reference_date).year
+				if df.fieldtype in ("Int", "Float"):
+					doc.set(df.fieldname, year_value)
+				else:
+					doc.set(df.fieldname, str(year_value))
+				continue
+
+			if df.fieldtype in ("Data", "Small Text", "Text"):
+				fallback = (doc.get("item_group_name") or doc.get("project_name") or doc.name or ITEM_GROUP)
+				doc.set(df.fieldname, frappe.scrub(fallback).upper()[: df.get("length") or 140])
+			elif df.fieldtype == "Select" and df.options:
+				options = [o for o in df.options.split("\n") if o]
+				if options:
+					doc.set(df.fieldname, options[0])
+
+	# ------------------------------------------------------------------
+	# US-03: 1:1 Project auto-creation
+	# ------------------------------------------------------------------
+	def create_project(self):
+		if self.project:
+			return  # idempotent — never create a second Project
+
+		project = frappe.new_doc("Project")
+		project.project_name = self.contract_title
+		project.customer = self.customer
+		project.company = self.company
+		project.currency = self.currency
+		project.expected_start_date = self.start_date
+		project.expected_end_date = self.end_date
+		project.cpc_source_contract = self.name
+		project.cpc_ownership = self.ownership
+		project.cpc_contract_value = self.base_value
+		project.cpc_cost_budget = self.total_cost_budget
+		project.cpc_target_margin = self.target_margin
+		self._fill_required_custom_fields(project, reference_date=self.start_date)
+		project.insert(ignore_permissions=True)
+
+		# mirror the contract's number: CT-2026-0051 -> PRJ-2026-0051
+		mirrored_name = self.name.replace("CT-", "PRJ-", 1) if self.name.startswith("CT-") else None
+		if mirrored_name and mirrored_name != project.name and not frappe.db.exists("Project", mirrored_name):
+			frappe.rename_doc("Project", project.name, mirrored_name, force=True)
+			project.name = mirrored_name
+
+		self.db_set("project", project.name, update_modified=False)

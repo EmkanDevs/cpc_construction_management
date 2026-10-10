@@ -1,0 +1,83 @@
+{
+ "doctype": "DocType",
+ "name": "CPC Calendar Week",
+ "module": "Cpc Construction Management",
+ "custom": 0,
+ "istable": 0,
+ "issingle": 0,
+ "quick_entry": 0,
+ "track_changes": 1,
+ "engine": "InnoDB",
+ "sort_field": "start_date",
+ "sort_order": "ASC",
+ "fields": [
+  {
+   "fieldname": "weekly_calendar",
+   "fieldtype": "Link",
+   "options": "CPC Weekly Calendar",
+   "label": "Weekly Calendar",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "week_year",
+   "fieldtype": "Int",
+   "label": "ISO Week Year",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "week_number",
+   "fieldtype": "Int",
+   "label": "ISO Week Number",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date (Monday)",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End Date / Week Ending (Sunday)",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "display_label",
+   "fieldtype": "Data",
+   "label": "Display Label",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  },
+  {
+   "role": "IRPO Progress Approver",
+   "read": 1
+  }
+ ]
+}

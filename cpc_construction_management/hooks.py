@@ -48,6 +48,198 @@ app_license = "mit"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+# doctype_js = {
+#     "Sales Order":"public/js/sales_order.js",
+#     "Purchase Order": "public/js/purchase_order.js",     
+# }
+
+# doctype_tree_js = {
+#     "Task": "public/js/task.js"   
+# }
+
+# doc_events = {
+#     "Sales Order": {
+#         "validate": "cpc_construction_management.cpc_construction_management.doc_events.sales_order.validate",
+#         "on_submit": "cpc_construction_management.cpc_construction_management.doc_events.sales_order.on_submit",
+#     },
+#     "Task": {
+#         "validate": [
+#             "cpc_construction_management.cpc_construction_management.progress.scope_review.validate_irpo_task_cancellation",
+#             "cpc_construction_management.cpc_construction_management.doc_events.task.validate_irpo_task",
+#         ] 
+#     },
+#     "Material Request": {
+#         "validate": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+#         ],
+#         "before_submit": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+#         ],
+#         "on_submit": [
+#             "cpc_construction_management.cpc_construction_management.doc_events.material_request.on_submit_material_request",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.mr_on_submit",
+#         ],
+#         "on_cancel": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.mr_on_cancel",
+#     },
+#     "Purchase Order": {
+#         "before_submit": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+#         ],
+#         "before_validate": "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+#         "validate": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_po_direct_fetch.validate_direct_po_linkage",
+#         ],
+#         "on_submit": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.po_on_submit",
+#         "on_cancel": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.po_on_cancel",
+#     },
+#     "Purchase Receipt": {
+#         "before_submit": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+#         ],
+#         "validate": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+#         ],
+#         "on_submit": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pr_on_submit",
+#         "on_cancel": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pr_on_cancel",
+#     },
+#     "Purchase Invoice": {
+#         "before_submit": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+#         ],
+#         "validate": [
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+#             "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+#         ],
+#         "on_submit": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pi_on_submit",
+#         "on_cancel": "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pi_on_cancel",
+#     },
+# }
+
+
+
+# Replace ONLY these three blocks in the app's hooks.py (everything else in hooks.py stays as is).
+
+doctype_js = {
+    "Sales Order": "public/js/sales_order.js",
+    "Purchase Order": "public/js/purchase_order.js",
+    "Material Request": "public/js/irpo_unplanned_mr.js",   # NEW (Task button lives in public/js/task.js)
+}
+
+doctype_tree_js = {
+    "Task": "public/js/task.js",
+}
+
+doc_events = {
+    "Sales Order": {
+        "validate": "cpc_construction_management.cpc_construction_management.doc_events.sales_order.validate",
+        "on_submit": "cpc_construction_management.cpc_construction_management.doc_events.sales_order.on_submit",
+    },
+    "Task": {
+        "validate": [
+            "cpc_construction_management.cpc_construction_management.progress.scope_review.validate_irpo_task_cancellation",
+            "cpc_construction_management.cpc_construction_management.doc_events.task.validate_irpo_task",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.validate_unplanned_rows",
+        ],
+    },
+    "Material Request": {
+        "validate": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.resolve_irpo_lines",
+        ],
+        "on_update": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.ensure_unplanned_rows",
+        ],
+        "before_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+        ],
+        "on_submit": [
+            "cpc_construction_management.cpc_construction_management.doc_events.material_request.on_submit_material_request",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.mr_on_submit",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.post_unplanned",
+        ],
+        "on_cancel": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.mr_on_cancel",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.reverse_unplanned",
+        ],
+    },
+    "Purchase Order": {
+        "before_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+        ],
+        "before_validate": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.carry_forward_unplanned",
+        ],
+        "validate": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_po_direct_fetch.validate_direct_po_linkage",
+        ],
+        "on_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.po_on_submit",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.post_unplanned",
+        ],
+        "on_cancel": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.po_on_cancel",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.reverse_unplanned",
+        ],
+    },
+    "Purchase Receipt": {
+        "before_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+        ],
+        "validate": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.carry_forward_unplanned",
+        ],
+        "on_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pr_on_submit",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.post_unplanned",
+        ],
+        "on_cancel": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pr_on_cancel",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.reverse_unplanned",
+        ],
+    },
+    "Purchase Invoice": {
+        "before_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+        ],
+        "validate": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.carry_forward_unplanned",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_expense_account.enforce_irpo_expense_account",
+        ],
+        "on_submit": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pi_on_submit",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.post_unplanned",
+        ],
+        "on_cancel": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_ledger.pi_on_cancel",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.reverse_unplanned",
+        ],
+    },
+    # NEW: Item Name / Item Type snapshot on every ledger row (planned and unplanned)
+    "IRPO Quantity Ledger": {
+        "before_insert": ["cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.snapshot_ledger_item_info"],
+    },
+}
+
+
+
+
 # Svg Icons
 # ------------------
 # include app icons in desk
@@ -177,6 +369,11 @@ app_license = "mit"
 # override_whitelisted_methods = {
 # 	"frappe.desk.doctype.event.event.get_events": "cpc_construction_management.event.get_events"
 # }
+
+# override_whitelisted_methods = {
+#     "erpnext.projects.doctype.task.task.get_children": "cpc_construction_management.cpc_construction_management.doc_events.task_tree.get_children"
+# }
+
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
@@ -247,3 +444,6 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+fixtures = [
+    {"dt": "Custom Field", "filters": [["module", "in", "Cpc Construction Management"]]},
+]

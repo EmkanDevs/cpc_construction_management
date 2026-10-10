@@ -1,0 +1,100 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-09-02 09:44:39.182599",
+ "doctype": "DocType",
+ "issingle": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_qty_actions",
+  "material_request_qty_action",
+  "purchase_order_qty_action",
+  "column_break_qs_1",
+  "purchase_receipt_qty_action",
+  "purchase_invoice_qty_action",
+  "section_override",
+  "quantity_override_role"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_qty_actions",
+   "fieldtype": "Section Break",
+   "label": "Quantity Budget Actions"
+  },
+  {
+   "default": "Warn",
+   "fieldname": "material_request_qty_action",
+   "fieldtype": "Select",
+   "label": "Material Request Qty Action",
+   "options": "Ignore\nWarn\nStop",
+   "reqd": 1
+  },
+  {
+   "default": "Stop",
+   "fieldname": "purchase_order_qty_action",
+   "fieldtype": "Select",
+   "label": "Purchase Order Qty Action",
+   "options": "Ignore\nWarn\nStop",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_qs_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Stop",
+   "fieldname": "purchase_receipt_qty_action",
+   "fieldtype": "Select",
+   "label": "Purchase Receipt Qty Action",
+   "options": "Ignore\nWarn\nStop",
+   "reqd": 1
+  },
+  {
+   "default": "Stop",
+   "fieldname": "purchase_invoice_qty_action",
+   "fieldtype": "Select",
+   "label": "Purchase Invoice Qty Action",
+   "options": "Ignore\nWarn\nStop",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_override",
+   "fieldtype": "Section Break",
+   "label": "Override"
+  },
+  {
+   "description": "Role permitted to override a Stop action on quantity budget. Every override must be logged (voucher, budget row, exceeded qty, reason).",
+   "fieldname": "quantity_override_role",
+   "fieldtype": "Link",
+   "label": "Quantity Override Role",
+   "options": "Role"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-02 09:44:39.182599",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "IRPO Quantity Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

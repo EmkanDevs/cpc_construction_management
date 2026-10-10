@@ -63,7 +63,7 @@ def _populate_items_from_boq_if_blank(doc):
 			"item_code": row.item_code,
 			"qty": row.qty,
 			"rate": row.rate,
-			"item_name":row.custom_boq_id
+			"custom_boq_id": row.boq_code,
 		})
 
 
@@ -147,3 +147,53 @@ def _sync_project_sales_order(doc):
 
 	if current != doc.name:
 		frappe.db.set_value("Project", doc.project, "sales_order", doc.name, update_modified=False)
+
+
+@frappe.whitelist()
+def get_initial_workflow_state(doctype):
+	"""Return the first workflow state (lowest idx) for an active workflow on
+	*doctype*, or ``None`` when no workflow is configured.
+
+	Used by the contract-center page to stamp ``workflow_state`` on programmatically
+	created documents so that the workflow_transitions Server Script does not raise
+	"No workflow state found".
+	"""
+	workflow_name = frappe.db.get_value(
+		"Workflow", {"document_type": doctype, "is_active": 1}, "name"
+	)
+	if not workflow_name:
+		return None
+	return frappe.db.get_value(
+		"Workflow Document State",
+		{"parent": workflow_name},
+		"state",
+		order_by="idx asc",
+	)
+
+
+@frappe.whitelist()
+def apply_workflow_action(name, action):
+	"""Apply a workflow transition on a Sales Order by action name.
+
+	Drives the "Save as Draft → Send for Approval → Approve/Reject" flow in the
+	contract-center quick entry. Reuses Frappe's own workflow engine so the
+	state machine (Draft → Pending Approval → Approved/Reject) and its docstatus
+	effects are applied exactly as if the action were triggered on the form.
+	"""
+	from frappe.model.workflow import get_transitions, get_workflow
+
+	doc = frappe.get_doc("Sales Order", name)
+	workflow = get_workflow(doc.doctype)
+	allowed_actions = {
+		t["action"]
+		for t in get_transitions(doc, workflow)
+		if t["allowed"] in frappe.get_roles()
+	}
+	if action not in allowed_actions:
+		current_state = doc.get(workflow.workflow_state_field)
+		frappe.throw(
+			_(
+				"Sales Order {0} is currently in the “{1}” state and cannot be moved with “{2}”."
+			).format(name, current_state or "-", action)
+		)
+	return frappe.model.workflow.apply_workflow(doc, action)
