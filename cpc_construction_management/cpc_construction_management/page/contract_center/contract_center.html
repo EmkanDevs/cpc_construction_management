@@ -1,0 +1,601 @@
+<!-- jinja -->
+<div class="cpc-control-center">
+	<header class="cc-page-header">
+		<div class="cc-heading">
+			<span class="cc-menu-icon" aria-hidden="true">
+				<svg viewBox="0 0 16 16">
+					<path d="M3 4h10M3 8h10M3 12h10" />
+				</svg>
+			</span>
+			<div>
+				<div class="cc-title-line">
+					<h1>{{ _("Construction Control Center") }}</h1>
+				</div>
+			</div>
+		</div>
+		<div class="cc-page-actions">
+			<button class="btn btn-default" data-action="add-contract">
+				{{ _("Add Contract") }}
+			</button>
+			<button class="btn btn-default" data-action="add-sales-order">
+				{{ _("Add Sales Order") }}
+			</button>
+			<button class="btn btn-primary cc-open-planner" data-action="open-planner">
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<path d="M3 13V8m5 5V3m5 10V6" />
+				</svg>
+				{{ _("Open Planner") }}
+			</button>
+		</div>
+	</header>
+
+	<section class="cc-register">
+		<header class="cc-register-header">
+			<div>
+				<h2>{{ _("Contract Register") }}</h2>
+				<p>{{ _("Find old contracts and open their Sales Orders or IRPO plan.") }}</p>
+			</div>
+			<span data-result-count>—</span>
+		</header>
+		<div class="cc-filters">
+			<label class="cc-search-filter"><span>{{ _("Search Contract") }}</span><input class="form-control cc-filter"
+					data-filter="search" placeholder="{{ _('Contract, project or customer') }}" /></label>
+			<div class="cc-customer-filter">
+				<span>{{ _("Customer") }}</span>
+				<div data-customer-filter></div>
+			</div>
+			<label><span>{{ _("Month") }}</span><input type="month" class="form-control cc-filter"
+					data-filter="month" /></label>
+			<label><span>{{ _("From Date") }}</span><input type="date" class="form-control cc-filter"
+					data-filter="from" /></label>
+			<label><span>{{ _("To Date") }}</span><input type="date" class="form-control cc-filter"
+					data-filter="to" /></label>
+			<button class="btn btn-default cc-clear" data-action="clear-filters" aria-label="{{ _('Clear filters') }}"
+				title="{{ _('Clear filters') }}">
+				↻
+			</button>
+		</div>
+		<div class="cc-table-wrap">
+			<table class="cc-table">
+				<thead>
+					<tr>
+						<th>{{ _("Contract") }}</th>
+						<th>{{ _("Customer") }}</th>
+						<th>{{ _("Contract Date") }}</th>
+						<th class="cc-number">{{ _("Value") }}</th>
+						<th>{{ _("Project") }}</th>
+						<th>{{ _("SO / IRPO") }}</th>
+						<th class="cc-actions-heading">{{ _("Actions") }}</th>
+					</tr>
+				</thead>
+				<tbody data-contract-rows></tbody>
+			</table>
+		</div>
+		<footer class="cc-pagination" data-pagination aria-label="{{ _('Contract pagination') }}"></footer>
+	</section>
+
+	<div class="cc-modal hide" id="cc-contract-modal" aria-hidden="true">
+		<div class="cc-modal-card cc-modal-wide" role="dialog" aria-modal="true"
+			aria-labelledby="cc-contract-modal-title">
+			<header class="cc-modal-header">
+				<div>
+					<h2 id="cc-contract-modal-title">{{ _("Add Construction Contract") }}</h2>
+				</div>
+				<button data-close-modal="cc-contract-modal" aria-label="{{ _('Close') }}">
+					×
+				</button>
+			</header>
+			<div class="cc-state-strip">
+				<div>
+					<span>{{ _("Construction Contract") }}</span><strong data-contract-state>{{ _("Draft Entry")
+						}}</strong>
+				</div>
+				<div>
+					<span>{{ _("Project") }}</span><strong data-project-state>{{ _("Waiting") }}</strong>
+				</div>
+				<div>
+					<span>{{ _("BOQ Items") }}</span><strong data-boq-state>{{ _("Editable") }}</strong>
+				</div>
+			</div>
+			<div class="cc-modal-body">
+				<div class="cc-contract-form-card">
+					<div class="cc-contract-details-grid">
+						<div class="cc-contract-form-column">
+							<label>
+								<span>{{ _("Contract Title") }} <b>*</b></span>
+								<input class="form-control" data-field="contract_title" />
+								<small>{{ _("e.g. Private Villa - Al Nakheel District") }}</small>
+							</label>
+							<div class="cc-contract-link-field">
+								<span>{{ _("Customer") }} <b>*</b></span>
+								<div data-contract-customer-field></div>
+							</div>
+							<label>
+								<span>{{ _("Ownership") }} <b>*</b></span>
+								<select class="form-control" data-field="ownership">
+									<option value="Own">{{ _("Own") }}</option>
+									<option value="Execute">{{ _("Execute") }}</option>
+								</select>
+								<small>{{ _("Own / Execute (CPC owns vs executes)") }}</small>
+							</label>
+							<label>
+								<span>{{ _("Contract Nature") }} <b>*</b></span>
+								<select class="form-control" data-field="contract_nature">
+									<option value="Remeasurement / BOQ">{{ _("Remeasurement / BOQ") }}</option>
+									<option value="Lumpsum">{{ _("Lumpsum") }}</option>
+								</select>
+							</label>
+						</div>
+						<div class="cc-contract-form-column">
+							<div class="cc-contract-link-field">
+								<span>{{ _("Company") }} <b>*</b></span>
+								<div data-contract-company-field></div>
+							</div>
+							<div class="cc-contract-link-field">
+								<span>{{ _("Currency") }} <b>*</b></span>
+								<div data-contract-currency-field></div>
+							</div>
+							<label>
+								<span>{{ _("Contract Date") }} <b>*</b></span>
+								<input type="date" class="form-control" data-field="contract_date" />
+							</label>
+							<label>
+								<span>{{ _("Start Date") }}</span>
+								<input type="date" class="form-control" data-field="start_date" />
+							</label>
+							<label>
+								<span>{{ _("End Date") }}</span>
+								<input type="date" class="form-control" data-field="end_date" />
+							</label>
+						</div>
+					</div>
+					<div class="cc-contract-percent-grid">
+						<label>
+							<span>{{ _("Advance %") }}</span>
+							<input type="number" class="form-control" data-field="advance_percent" />
+						</label>
+						<label>
+							<span>{{ _("Retention %") }}</span>
+							<input type="number" class="form-control" data-field="retention_percent" />
+						</label>
+					</div>
+					<div class="cc-subsection-heading">
+						<h3>{{ _("BOQ") }}</h3>
+					</div>
+					<div class="cc-dialog-table-wrap">
+						<table class="cc-dialog-table">
+							<thead>
+								<tr>
+									<th>{{ _("BOQ Code") }}</th>
+									<th>{{ _("Work Description") }}</th>
+									<th>{{ _("UOM") }}</th>
+									<th>{{ _("Qty") }}</th>
+									<th>{{ _("Rate") }}</th>
+									<th>{{ _("Cost Budget") }}</th>
+									<th>{{ _("Amount (Value)") }}</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody data-boq-rows></tbody>
+						</table>
+					</div>
+					<div class="cc-add-boq-row-wrap">
+						<button class="btn btn-xs btn-default" data-add-boq-row>
+							{{ _("+ Add Row") }}
+						</button>
+					</div>
+					<div class="cc-contract-summary hide" data-contract-summary>
+						<label>
+							<span>{{ _("Base Contract Value") }}</span>
+							<input type="text" class="form-control" readonly data-summary-field="base_value" />
+						</label>
+						<label>
+							<span>{{ _("Total Cost Budget") }}</span>
+							<input type="text" class="form-control" readonly data-summary-field="total_cost_budget" />
+						</label>
+						<label>
+							<span>{{ _("Target Margin") }}</span>
+							<input type="text" class="form-control" readonly data-summary-field="target_margin" />
+						</label>
+						<label>
+							<span>{{ _("Target Margin %") }}</span>
+							<input type="text" class="form-control" readonly data-summary-field="target_margin_percent" />
+						</label>
+					</div>
+				</div>
+			</div>
+			<footer class="cc-modal-footer">
+				<span>{{ _("Save keeps the contract in Draft. Submitting it creates the Item Master rows and the Project.") }}</span>
+				<div>
+					<button class="btn btn-default" data-close-modal="cc-contract-modal">
+						{{ _("Cancel") }}</button>
+					<button class="btn btn-primary hide" data-create-sales-order>
+						{{ _("Create Sales Order") }}
+					</button>
+					<button class="btn btn-primary" data-save-contract>
+						{{ _("Save") }}
+					</button>
+					<button class="btn btn-success hide" data-submit-contract>
+						{{ _("Submit") }}
+					</button>
+				</div>
+			</footer>
+		</div>
+	</div>
+
+	<div class="cc-modal hide" id="cc-sales-order-modal" aria-hidden="true">
+		<div class="cc-modal-card cc-modal-wide" role="dialog" aria-modal="true"
+			aria-labelledby="cc-sales-order-modal-title">
+			<header class="cc-modal-header">
+				<div class="cc-so-header">
+					<h2 id="cc-sales-order-modal-title">{{ _("Add Sales Order / RPO") }}</h2>
+					<div class="cc-so-tabs">
+						<button type="button" class="cc-so-tab is-active" data-so-tab="details">
+							{{ _("Details") }}</button>
+						<button type="button" class="cc-so-tab" data-so-tab="progress">
+							{{ _("Progress") }}</button>
+					</div>
+				</div>
+				<button data-close-modal="cc-sales-order-modal" aria-label="{{ _('Close') }}">
+					×
+				</button>
+			</header>
+			<div class="cc-state-strip">
+				<div><span>{{ _("Source Contract") }}</span><strong data-so-contract-state>{{ _("Ready") }}</strong></div>
+				<div><span>{{ _("BOQ Items") }}</span><strong data-so-boq-state>{{ _("Loaded") }}</strong></div>
+				<div>
+					<span>{{ _("Sales Order") }}</span><strong data-sales-order-state>{{ _("Draft Entry") }}</strong>
+				</div>
+			</div>
+			<div class="cc-modal-body">
+				<div class="cc-form-grid" data-so-form-view>
+					<label><span>{{ _("Construction Contract") }}</span><input class="form-control"
+							data-field="contract" readonly /></label>
+					<label><span>{{ _("Project") }}</span><input class="form-control" data-field="project"
+							readonly /></label>
+					<label><span>{{ _("Customer") }}</span><input class="form-control" data-field="customer"
+							readonly /></label>
+					<label><span>{{ _("Delivery Date") }}</span><input type="date" class="form-control"
+							data-field="delivery_date" /></label>
+					<label><span>{{ _("Customer PO") }}</span><input class="form-control" data-field="customer_po"
+							placeholder="{{ _('Optional') }}" /></label>
+					<label><span>{{ _("Currency") }}</span><input class="form-control" data-field="currency"
+							readonly /></label>
+					<label><span>{{ _("Advance %") }}</span><input type="number" class="form-control"
+							data-field="advance_payment" /></label>
+					<label><span>{{ _("Retention %") }}</span><input type="number" class="form-control"
+							data-field="retention" /></label>
+				</div>
+				<div data-so-form-view>
+					<div class="cc-subsection-heading">
+						<h3>{{ _("Sales Order Items from BOQ") }}</h3>
+					</div>
+					<div class="cc-dialog-table-wrap">
+						<table class="cc-dialog-table">
+							<thead>
+								<tr>
+									<th>{{ _("Item / BOQ Code") }}</th>
+									<th>{{ _("Description") }}</th>
+									<th>{{ _("Qty") }}</th>
+									<th>{{ _("Rate") }}</th>
+									<th>{{ _("Amount") }}</th>
+								</tr>
+							</thead>
+							<tbody data-sales-order-items></tbody>
+						</table>
+					</div>
+				</div>
+				<div class="hide" data-so-progress-view>
+					<div class="cc-subsection-heading">
+						<h3>{{ _("State Change Log") }}</h3>
+					</div>
+					<div class="cc-dialog-table-wrap">
+						<table class="cc-dialog-table">
+							<thead>
+								<tr>
+									<th>{{ _("Username") }}</th>
+									<th>{{ _("Role") }}</th>
+									<th>{{ _("Workflow State") }}</th>
+									<th>{{ _("Modification Time") }}</th>
+								</tr>
+							</thead>
+							<tbody data-sales-order-state-change></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			<footer class="cc-modal-footer">
+				<span>{{ _("Sales Order is saved as Draft, then sent for approval.") }}</span>
+				<div>
+					<button class="btn btn-default" data-close-modal="cc-sales-order-modal">
+						{{ _("Cancel") }}</button>
+					<button class="btn btn-primary hide" data-so-send-approval>
+						{{ _("Send for Approval") }}
+					</button>
+					<button class="btn btn-default hide" data-so-reject>
+						{{ _("Reject") }}
+					</button>
+					<button class="btn btn-primary hide" data-so-approve>
+						{{ _("Approve") }}
+					</button>
+					<button class="btn btn-primary hide" data-so-break-irpo>
+						{{ _("Break IRPO") }}
+					</button>
+					<button class="btn btn-primary" data-save-sales-order>
+						{{ _("Save") }}
+					</button>
+				</div>
+			</footer>
+		</div>
+	</div>
+
+	<div class="cc-tweak">
+		<button class="cc-tweak-trigger" aria-label="{{ _('Display settings') }}">Aa</button>
+		<div class="cc-tweak-panel">
+			<strong>{{ _("Density") }}</strong><button data-density="comfortable" class="is-active">{{ _("Comfortable")
+				}}</button><button data-density="compact">{{ _("Compact") }}</button>
+		</div>
+	</div>
+
+	<!-- ========================================================= -->
+	<!-- IRPO Planner overlay modal                                  -->
+	<!-- ========================================================= -->
+	<div class="cc-planner-overlay hide" id="cc-planner-modal" aria-hidden="true" role="dialog" aria-modal="true"
+		aria-labelledby="cc-planner-title">
+
+		<!-- Top bar -->
+		<header class="planner-topbar">
+			<div class="planner-topbar-left">
+				<span class="planner-hamburger" aria-hidden="true">
+					<svg viewBox="0 0 16 16">
+						<path d="M3 4h10M3 8h10M3 12h10" />
+					</svg>
+				</span>
+				<div class="planner-title-block">
+					<h1 id="cc-planner-title" class="planner-title">{{ _("IRPO Planner") }}</h1>
+					<p class="planner-subtitle" data-planner-context>—</p>
+				</div>
+			</div>
+			<div class="planner-topbar-right">
+				<button class="btn btn-default btn-sm planner-topbar-btn" data-action="add-contract">
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path d="M8 3v10M3 8h10" />
+					</svg>
+					{{ _("Add Contract") }}
+				</button>
+				<button class="btn btn-default btn-sm planner-topbar-btn planner-so-approved-btn">
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path d="M3 8l3 3 7-7" />
+					</svg>
+					{{ _("Sales Order Approved") }}
+				</button>
+				<button class="btn btn-default btn-sm planner-topbar-btn planner-break-btn" data-planner-break-irpo>
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path d="M4 8h3m2 0h3M8 4v3m0 2v3" />
+					</svg>
+					{{ _("Break IRPO") }}
+				</button>
+				<button class="btn btn-default btn-sm planner-topbar-btn" data-planner-close>{{ _("Back to Construction Control") }}</button>
+			</div>
+		</header>
+
+		<!-- Filter bar -->
+		<div class="planner-filterbar">
+			<select class="form-control planner-filter-select" data-planner-filter="contract">
+				<option value="">{{ _("All Contracts") }}</option>
+			</select>
+			<select class="form-control planner-filter-select" data-planner-filter="project">
+				<option value="">{{ _("All Projects") }}</option>
+			</select>
+			<select class="form-control planner-filter-select" data-planner-filter="sales_order">
+				<option value="">{{ _("All Sales Orders") }}</option>
+			</select>
+			<span class="planner-filter-sep">{{ _("Tree View:") }}</span>
+			<button class="btn btn-xs btn-default planner-ctrl-btn" data-planner-expand-all>
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<path d="M5 3l3-3 3 3M5 13l3 3 3-3" />
+				</svg>
+				{{ _("Expand All") }}
+			</button>
+			<button class="btn btn-xs btn-default planner-ctrl-btn" data-planner-collapse-all>
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<path d="M3 6l5-5 5 5M3 10l5 5 5-5" />
+				</svg>
+				{{ _("Collapse All") }}
+			</button>
+			<span class="planner-timeline-heading">{{ _("Schedule Timeline") }}</span>
+			<select class="form-control planner-filter-select planner-sort-select" data-planner-sort>
+				<option value="">{{ _("Default") }}</option>
+				<option value="modified">{{ _("Last Updated On") }}</option>
+				<option value="subject">{{ _("Subject") }}</option>
+				<option value="name">{{ _("ID") }}</option>
+				<option value="creation">{{ _("Created On") }}</option>
+				<option value="most_used">{{ _("Most Used") }}</option>
+				<option value="project">{{ _("Project") }}</option>
+				<option value="is_group">{{ _("Is Group") }}</option>
+				<option value="status">{{ _("Status") }}</option>
+				<option value="priority">{{ _("Priority") }}</option>
+				<option value="parent_task">{{ _("Parent Task") }}</option>
+				<option value="cpc_node_type">{{ _("Node Type") }}</option>
+				<option value="exp_start_date">{{ _("Expected Start Date") }}</option>
+				<option value="exp_end_date">{{ _("Expected End Date") }}</option>
+				<option value="progress">{{ _("% Progress") }}</option>
+				<option value="duration">{{ _("Duration (Days)") }}</option>
+			</select>
+		</div>
+
+		<!-- Split body -->
+		<div class="planner-body">
+
+			<!-- Left: WBS table -->
+			<div class="planner-wbs-panel">
+				<div class="planner-wbs-scroll">
+					<table class="planner-wbs-table">
+						<colgroup>
+							<col class="planner-col-main" />
+							<col class="planner-col-uom" />
+							<col class="planner-col-qty" />
+							<col class="planner-col-budget" />
+							<col class="planner-col-pending" />
+							<col class="planner-col-consumed" />
+							<col class="planner-col-progress" />
+							<col class="planner-col-actions" />
+						</colgroup>
+						<thead>
+							<tr>
+								<th class="planner-wbs-th-main">{{ _("GROUP / LEAF IRPO") }}</th>
+								<th>{{ _("UOM") }}</th>
+								<th class="planner-num">{{ _("QTY") }}</th>
+								<th class="planner-num">{{ _("BUDGET (SAR)") }}</th>
+								<th>{{ _("PENDING BUDGET") }}</th>
+								<th>{{ _("CONSUMED BUDGET") }}</th>
+								<th>{{ _("PROGRESS") }}</th>
+								<th>{{ _("ACTIONS") }}</th>
+							</tr>
+						</thead>
+						<tbody data-planner-wbs-body>
+							<tr>
+								<td colspan="8" class="planner-empty">{{ _("Loading…") }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Right: Schedule timeline -->
+			<div class="planner-timeline-panel">
+				<div class="planner-timeline-scroll">
+					<table class="planner-timeline-table">
+						<thead>
+							<tr data-planner-timeline-header></tr>
+						</thead>
+						<tbody data-planner-timeline-body></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- /IRPO Planner overlay -->
+
+	<!-- ========================================================= -->
+	<!-- Break IRPO Dialog                                          -->
+	<!-- ========================================================= -->
+	<div class="cc-modal hide" id="cc-break-irpo-modal" aria-hidden="true" role="dialog" aria-modal="true"
+		aria-labelledby="cc-break-irpo-title">
+		<div class="cc-modal-card cc-break-irpo-card">
+			<header class="cc-modal-header">
+				<div>
+					<h2 id="cc-break-irpo-title">{{ _("Break Group IRPO into Leaf IRPO Tasks") }}</h2>
+				</div>
+				<button data-close-break-irpo aria-label="{{ _('Close') }}">×</button>
+			</header>
+			<div class="cc-modal-body cc-break-irpo-body">
+				<div class="cc-break-irpo-top">
+					<div class="cc-break-irpo-top-row">
+						<label class="cc-break-irpo-boq-label">
+							<span>{{ _("BOQ Line") }}</span>
+							<select class="form-control" data-break-boq-select></select>
+						</label>
+						<label class="cc-break-irpo-color-label">
+							<span>{{ _("Default Color") }}</span>
+							<input type="color" class="cc-break-header-color" data-break-header-color value="#2490ef" />
+						</label>
+					</div>
+					<div class="cc-break-irpo-fetch-row">
+						<button class="btn btn-default btn-sm" data-break-fetch-prev>
+							<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 8a6 6 0 1 0 6-6"/><path d="M2 4v4h4"/></svg>
+							{{ _("Get Previous IRPO") }}
+						</button>
+						<span class="cc-break-fetch-hint">{{ _("Load existing IRPO tasks for the selected BOQ line.") }}</span>
+					</div>
+				</div>
+				<div class="cc-dialog-table-wrap">
+					<table class="cc-dialog-table cc-break-irpo-table">
+						<thead>
+							<tr>
+								<th>{{ _("Subject") }} <span class="cc-mandatory-mark">*</span></th>
+								<th>{{ _("UOM") }} <span class="cc-mandatory-mark">*</span></th>
+								<th>{{ _("Planned Start") }}</th>
+								<th>{{ _("Planned End") }}</th>
+								<th>{{ _("Account") }} <span class="cc-mandatory-mark">*</span></th>
+								<th class="cc-number">{{ _("Budget Qty") }}</th>
+								<th class="cc-number">{{ _("Budget Amount") }}</th>
+								<th>{{ _("Color") }}</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody data-break-irpo-rows></tbody>
+					</table>
+				</div>
+				<div class="cc-break-irpo-tools">
+					<button class="btn btn-xs btn-default cc-break-irpo-add-row" data-break-add-row>
+						+ {{ _("Add Row") }}
+					</button>
+					<div class="cc-break-irpo-tools-right">
+						<button class="btn btn-xs btn-default" data-break-upload>
+							<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 11V3M5 6l3-3 3 3"/><path d="M3 12h10"/></svg>
+							{{ _("Upload") }}
+						</button>
+						<button class="btn btn-xs btn-default" data-break-download>
+							<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3v8M5 8l3 3 3-3"/><path d="M3 12h10"/></svg>
+							{{ _("Download") }}
+						</button>
+					</div>
+				</div>
+			</div>
+			<footer class="cc-modal-footer cc-break-irpo-footer">
+				<span data-break-budget-summary class="cc-break-budget-summary"></span>
+				<div>
+					<button class="btn btn-default" data-close-break-irpo>{{ _("Cancel") }}</button>
+					<button class="btn btn-primary" data-break-save>{{ _("Save IRPO Tasks") }}</button>
+				</div>
+			</footer>
+		</div>
+	</div>
+	<!-- /Break IRPO Dialog -->
+
+	<!-- IRPO Task Detail Viewer -->
+	<div class="cc-modal hide" id="cc-irpo-viewer-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="cc-irpo-viewer-title">
+		<div class="cc-modal-card cc-irpo-viewer-card">
+			<header class="cc-viewer-header">
+				<div class="cc-viewer-header-left">
+					<div class="cc-viewer-icon" aria-hidden="true">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><path d="M3 9h18M9 21V9"/></svg>
+					</div>
+					<div>
+						<div class="cc-viewer-header-title" id="cc-irpo-viewer-title"></div>
+						<div class="cc-viewer-header-sub"></div>
+					</div>
+				</div>
+				<div class="cc-viewer-header-right">
+					<button class="btn btn-default btn-sm cc-viewer-edit-btn" data-viewer-edit>
+						<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
+						{{ _("Edit Document") }}
+					</button>
+					<button class="cc-modal-close-x" data-irpo-viewer-close aria-label="{{ _('Close') }}">&#x2715;</button>
+				</div>
+			</header>
+			<nav class="cc-viewer-tabs" role="tablist">
+				<button class="cc-viewer-tab-btn cc-viewer-tab-active" data-viewer-tab="overview" role="tab">{{ _("Overview & General") }}</button>
+				<button class="cc-viewer-tab-btn" data-viewer-tab="items" role="tab">{{ _("Items Details") }}</button>
+				<button class="cc-viewer-tab-btn" data-viewer-tab="unplanned_items" role="tab">{{ _("Unplanned Item Details") }}</button>
+				<button class="cc-viewer-tab-btn" data-viewer-tab="budget" role="tab">{{ _("Dual Budget & Consumption") }}</button>
+				<button class="cc-viewer-tab-btn" data-viewer-tab="progress" role="tab">{{ _("Progress & History") }}</button>
+			</nav>
+			<div class="cc-modal-body cc-viewer-body">
+				<div data-viewer-panel="overview" role="tabpanel"></div>
+				<div data-viewer-panel="items" class="hide" role="tabpanel"></div>
+				<div data-viewer-panel="unplanned_items" class="hide" role="tabpanel"></div>
+				<div data-viewer-panel="budget" class="hide" role="tabpanel"></div>
+				<div data-viewer-panel="progress" class="hide" role="tabpanel"></div>
+			</div>
+			<footer class="cc-modal-footer cc-viewer-footer hide">
+				<div class="cc-viewer-footer-actions">
+					<button class="btn btn-default btn-sm hide" data-viewer-cancel-edit>{{ _("Cancel Edit") }}</button>
+					<button class="btn btn-primary btn-sm hide" data-viewer-save>{{ _("Save") }}</button>
+				</div>
+			</footer>
+		</div>
+	</div>
+	<!-- /IRPO Task Detail Viewer -->
+</div>
