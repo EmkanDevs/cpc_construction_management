@@ -135,6 +135,7 @@ frappe.ui.form.on("Construction Contract", {
 	onload(frm) {
 		toggle_revision_fields(frm);
 	},
+	
 });
 
 function create_sales_order(frm) {

@@ -16,6 +16,12 @@
   "column_break_2",
   "cost_budget",
   "margin",
+  "item_classification_section",
+  "item_group_l1",
+  "item_group_l2",
+  "column_break_3",
+  "item_group_l3",
+  "item_group",
   "item_code"
  ],
  "fields": [
@@ -89,6 +95,48 @@
    "read_only": 1
   },
   {
+   "fieldname": "item_classification_section",
+   "fieldtype": "Section Break",
+   "label": "Item Classification"
+  },
+  {
+   "description": "Defaults from Item Variant Settings; editable until Item is created.",
+   "fieldname": "item_group_l1",
+   "fieldtype": "Link",
+   "label": "Item Group L1",
+   "options": "Item Group",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.item_code"
+  },
+  {
+   "fieldname": "item_group_l2",
+   "fieldtype": "Link",
+   "label": "Item Group L2",
+   "options": "Item Group",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.item_code"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_group_l3",
+   "fieldtype": "Link",
+   "label": "Item Group L3",
+   "options": "Item Group",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.item_code"
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "label": "Item Group",
+   "options": "Item Group",
+   "read_only": 1,
+   "read_only_depends_on": "eval:doc.item_code"
+  },
+  {
    "description": "Filled by \"Create Item Master\"; locked once set.",
    "fieldname": "item_code",
    "fieldtype": "Link",
@@ -102,7 +150,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-18 11:02:51.571977",
+ "modified": "2026-09-07 13:38:41.274882",
  "modified_by": "Administrator",
  "module": "Cpc Construction Management",
  "name": "Contract BOQ Item",
