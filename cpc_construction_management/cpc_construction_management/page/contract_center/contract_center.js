@@ -1,5 +1,6 @@
 frappe.provide("cpc_construction_management.contract_center");
 
+{% include "cpc_construction_management/cpc_construction_management/page/weekly_progress/weekly_progress_view.js" %}
 {% include "cpc_construction_management/cpc_construction_management/page/contract_center/contract_center_view.js" %}
 {% include "cpc_construction_management/cpc_construction_management/page/contract_center/contract_center_renderer.js" %}
 {% include "cpc_construction_management/cpc_construction_management/page/contract_center/contract_center_dialogs.js" %}

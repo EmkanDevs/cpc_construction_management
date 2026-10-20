@@ -1,3 +1,5 @@
+
+
 # import frappe
 # from frappe import _
 
@@ -49,11 +51,12 @@
 # 	if doc.items:
 # 		return
 
-# 	boq_items = frappe.get_all(
+# 	boq_items = frappe.get_list(
 # 		"Contract BOQ Item",
 # 		filters={"parent": doc.cpc_contract, "parenttype": "Construction Contract"},
 # 		fields=["item_code", "qty", "rate"],
 # 		order_by="idx asc",
+# 		parent_doctype="Construction Contract",
 # 	)
 
 # 	for row in boq_items:
@@ -93,7 +96,7 @@
 # 		doc.cpc_related_sales_orders = []
 # 		return
 
-# 	related_names = frappe.get_all(
+# 	related_names = frappe.get_list(
 # 		"Sales Order",
 # 		filters={"cpc_contract": doc.cpc_contract, "name": ["!=", doc.name or ""]},
 # 		pluck="name",
@@ -114,8 +117,7 @@
 # 	filters = {"cpc_contract": cpc_contract}
 # 	if exclude:
 # 		filters["name"] = ["!=", exclude]
-# 	return frappe.get_all("Sales Order", filters=filters, pluck="name", order_by="creation asc")
-
+# 	return frappe.get_list("Sales Order", filters=filters, pluck="name", order_by="creation asc")
 
 
 # def on_submit(doc, method=None):
@@ -210,23 +212,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import frappe
 from frappe import _
 
@@ -237,6 +222,7 @@ def validate(doc, method=None):
 
 	_fetch_from_contract_if_blank(doc)
 	_populate_items_from_boq_if_blank(doc)
+	_fill_item_descriptions(doc)
 	_validate_items(doc)
 	_refresh_related_sales_orders(doc)
 
@@ -281,7 +267,8 @@ def _populate_items_from_boq_if_blank(doc):
 	boq_items = frappe.get_list(
 		"Contract BOQ Item",
 		filters={"parent": doc.cpc_contract, "parenttype": "Construction Contract"},
-		fields=["item_code", "qty", "rate"],
+		# boq_code was missing here, so custom_boq_id below was always blank.
+		fields=["item_code", "boq_code", "description", "qty", "rate"],
 		order_by="idx asc",
 		parent_doctype="Construction Contract",
 	)
@@ -293,8 +280,41 @@ def _populate_items_from_boq_if_blank(doc):
 			"item_code": row.item_code,
 			"qty": row.qty,
 			"rate": row.rate,
+			"description": row.description,
 			"custom_boq_id": row.boq_code,
 		})
+
+
+def _fill_item_descriptions(doc):
+	"""E-04: keep the BOQ Work Description on Sales Order Items.
+
+	The Contract Center inserts Sales Order rows with only item_code / qty /
+	rate, so description was saved blank. Fill any blank description from the
+	Contract BOQ Item for that item code (the BOQ Work Description the user
+	typed), falling back to the Item's own description / name."""
+	blank_rows = [row for row in doc.items if row.item_code and not (row.description or "").strip()]
+	if not blank_rows:
+		return
+
+	boq_descriptions = {
+		r.item_code: r.description
+		for r in frappe.get_all(
+			"Contract BOQ Item",
+			filters={"parent": doc.cpc_contract, "parenttype": "Construction Contract"},
+			fields=["item_code", "description"],
+		)
+		if r.item_code and r.description
+	}
+
+	for row in blank_rows:
+		description = boq_descriptions.get(row.item_code)
+		if not description:
+			item = frappe.db.get_value(
+				"Item", row.item_code, ["description", "item_name"], as_dict=True
+			)
+			description = (item.description or item.item_name) if item else None
+		if description:
+			row.description = description
 
 
 def _validate_items(doc):
@@ -426,3 +446,76 @@ def apply_workflow_action(name, action):
 			).format(name, current_state or "-", action)
 		)
 	return frappe.model.workflow.apply_workflow(doc, action)
+
+
+@frappe.whitelist()
+def get_approval_progress(name):
+	"""W-04: approval summary for the Contract Center Progress tab.
+
+	Returns the current stage, who/what role the order is pending with, who
+	completed earlier steps, the next allowed actions (grouped by role) and
+	how long the order has been waiting at the current stage.
+	"""
+	from frappe.utils import get_datetime, now_datetime
+
+	doc = frappe.get_doc("Sales Order", name)
+	workflow_name = frappe.db.get_value(
+		"Workflow", {"document_type": "Sales Order", "is_active": 1}, "name"
+	)
+	if not workflow_name:
+		return {
+			"current_state": doc.get("workflow_state") or "",
+			"is_final": 1,
+			"completed": [],
+			"next_actions": [],
+		}
+
+	workflow = frappe.get_cached_doc("Workflow", workflow_name)
+	current_state = doc.get(workflow.workflow_state_field) or ""
+
+	log = sorted(doc.get("state_change") or [], key=lambda r: str(r.modification_time or ""))
+	last = log[-1] if log else None
+	completed = [
+		{"state": r.workflow_state, "user": r.username, "at": str(r.modification_time or "")}
+		for r in log[:-1]
+	]
+
+	# Actions available from the current state, grouped by the role allowed to take them
+	next_actions = []
+	for t in workflow.transitions:
+		if t.state != current_state:
+			continue
+		users = frappe.db.sql_list(
+			"""SELECT DISTINCT hr.parent FROM `tabHas Role` hr
+			JOIN `tabUser` u ON u.name = hr.parent
+			WHERE hr.role = %s AND hr.parenttype = 'User' AND u.enabled = 1
+			AND u.name NOT IN ('Administrator', 'Guest')""",
+			t.allowed,
+		)
+		next_actions.append({
+			"action": t.action,
+			"next_state": t.next_state,
+			"role": t.allowed,
+			"user_count": len(users),
+			"users": users[:5],
+		})
+
+	is_final = doc.docstatus == 1 or not next_actions
+	since = (
+		get_datetime(last.modification_time)
+		if last and last.modification_time
+		else get_datetime(doc.modified)
+	)
+	waiting = max(0, int((now_datetime() - since).total_seconds()))
+
+	return {
+		"current_state": current_state,
+		"last_user": last.username if last else "",
+		"last_at": str(last.modification_time) if last and last.modification_time else "",
+		"completed": completed,
+		"next_actions": next_actions,
+		"pending_with": ", ".join(sorted({a["role"] for a in next_actions})),
+		"waiting_seconds": 0 if is_final else waiting,
+		"is_bottleneck": (not is_final) and waiting > 86400,
+		"is_final": 1 if is_final else 0,
+	}

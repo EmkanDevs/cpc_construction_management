@@ -1123,6 +1123,207 @@ body.cc-modal-open .modal {
 	display: none;
 }
 
+.cc-weekly-overlay {
+	--wp-blue: #2563a6;
+	--wp-blue-dark: #174b82;
+	--wp-green: #17805d;
+	--wp-green-dark: #116448;
+	--wp-amber: #975a12;
+	background: var(--fg-color, #fff);
+	bottom: 0;
+	display: flex;
+	flex-direction: column;
+	left: 0;
+	position: fixed;
+	right: 0;
+	top: 48px;
+	z-index: 101;
+}
+
+.cc-weekly-overlay.hide {
+	display: none;
+}
+
+.cc-weekly-header {
+	align-items: center;
+	background: #f5f9fd;
+	border-bottom: 1px solid #dbe7f2;
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: space-between;
+	padding: 10px 20px;
+}
+
+.cc-weekly-header h1 {
+	color: #183b5b;
+	font-size: 18px;
+	font-weight: 700;
+	margin: 0;
+}
+
+.cc-weekly-header [data-weekly-close] {
+	background: #fff;
+	border-color: #b7cee1;
+	color: var(--wp-blue-dark);
+	font-weight: 600;
+}
+
+.cc-weekly-header [data-weekly-close]:hover {
+	background: #eaf3fa;
+	border-color: var(--wp-blue);
+}
+
+.cc-weekly-content {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px 20px;
+}
+
+.cc-weekly-content .wp-tabs {
+	border-bottom: 1px solid #dbe7f2;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 12px 0 18px;
+	padding-bottom: 12px;
+}
+
+.cc-weekly-content .wp-tabs .btn {
+	border-color: #cbd8e5;
+	border-radius: 6px;
+	color: #34536e;
+	font-size: 14px;
+	font-weight: 600;
+	min-height: 40px;
+	padding: 0 18px;
+}
+
+.cc-weekly-content .wp-tabs .btn:hover {
+	background: #eaf3fa;
+	border-color: #9dbbd5;
+	color: var(--wp-blue-dark);
+}
+
+.cc-weekly-content .wp-tabs .btn.btn-primary,
+.cc-weekly-content .wp-tabs .btn.btn-primary:hover {
+	background: var(--wp-blue);
+	border-color: var(--wp-blue);
+	color: #fff;
+}
+
+.cc-weekly-content .wp-filters .control-label,
+.cc-weekly-content .wp-filters .form-control,
+.cc-weekly-content .wp-filters .like-disabled-input {
+	font-weight: 600;
+}
+
+.cc-weekly-content .wp-filters .control-label {
+	color: #34536e;
+}
+
+.cc-weekly-content .wp-filters .form-control:focus,
+.cc-weekly-content .wp-panel .form-control:focus {
+	border-color: var(--wp-blue);
+	box-shadow: 0 0 0 2px rgba(37, 99, 166, .14);
+}
+
+.cc-weekly-content .wp-actions .btn {
+	font-size: 14px;
+	font-weight: 600;
+	margin-right: 8px;
+	padding: 7px 22px;
+}
+
+.cc-weekly-content .wp-actions .wp-save {
+	background: #eef5fb;
+	border-color: #a9c7df;
+	color: var(--wp-blue-dark);
+}
+
+.cc-weekly-content .wp-actions .wp-save:hover {
+	background: #dcecf8;
+}
+
+.cc-weekly-content .wp-actions .wp-send,
+.cc-weekly-content .wp-panel [data-approve],
+.cc-weekly-content .wp-panel [data-sr-approve] {
+	background: var(--wp-green);
+	border-color: var(--wp-green);
+	color: #fff;
+}
+
+.cc-weekly-content .wp-actions .wp-send:hover,
+.cc-weekly-content .wp-panel [data-approve]:hover:not(:disabled),
+.cc-weekly-content .wp-panel [data-sr-approve]:hover {
+	background: var(--wp-green-dark);
+	border-color: var(--wp-green-dark);
+}
+
+.cc-weekly-content .wp-panel [data-i] {
+	background: var(--wp-blue);
+	border-color: var(--wp-blue);
+	color: #fff;
+}
+
+.cc-weekly-content .wp-panel [data-i]:hover {
+	background: var(--wp-blue-dark);
+	border-color: var(--wp-blue-dark);
+}
+
+.cc-weekly-content .wp-panel [data-return],
+.cc-weekly-content .wp-panel [data-sr-reject] {
+	background: #fff4df;
+	border-color: #eacb90;
+	color: var(--wp-amber);
+}
+
+.cc-weekly-content .wp-panel [data-return]:hover,
+.cc-weekly-content .wp-panel [data-sr-reject]:hover {
+	background: #fce9c2;
+}
+
+.cc-weekly-content .wp-panel [data-correct],
+.cc-weekly-content .wp-panel [data-sr-comm] {
+	background: #eef5fb;
+	border-color: #a9c7df;
+	color: var(--wp-blue-dark);
+}
+
+.cc-weekly-content .wp-panel [data-correct]:hover,
+.cc-weekly-content .wp-panel [data-sr-comm]:hover {
+	background: #dcecf8;
+}
+
+.cc-weekly-content .wp-panel .btn:disabled {
+	opacity: .5;
+}
+
+.cc-weekly-content .wp-panel .table {
+	border-color: #dce6ef;
+	color: #263b4d;
+}
+
+.cc-weekly-content .wp-panel .table thead th {
+	background: #eaf2f9;
+	border-color: #d1e0ed;
+	color: #244b6d;
+	font-weight: 700;
+}
+
+.cc-weekly-content .wp-panel .table tbody tr:nth-child(even) {
+	background: #f8fbfd;
+}
+
+.cc-weekly-content .wp-panel .table tbody tr:hover {
+	background: #edf6fc;
+}
+
+.cc-weekly-content .wp-panel .table td {
+	border-color: #e3ebf2;
+	vertical-align: middle;
+}
+
 /* ---- Top bar ---- */
 .planner-topbar {
 	align-items: center;
@@ -1300,7 +1501,7 @@ body.cc-modal-open .modal {
 	border-collapse: separate;
 	border-spacing: 0;
 	font-size: .82rem;
-	min-width: 1040px;
+	min-width: 1170px;
 	table-layout: fixed;
 	width: 100%;
 }
@@ -1331,6 +1532,10 @@ body.cc-modal-open .modal {
 
 .planner-wbs-table .planner-col-progress {
 	width: 140px;
+}
+
+.planner-wbs-table .planner-col-weekly {
+	width: 130px;
 }
 
 .planner-wbs-table .planner-col-actions {
@@ -2857,3 +3062,15 @@ margin-top: 2px;
   font-size: 12px;
   font-weight: 500;
 }
+
+/* Sales Order approval summary (Progress tab) */
+.cpc-control-center .cc-approval-summary { margin-bottom: 16px; }
+.cpc-control-center .cc-approval-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.cpc-control-center .cc-approval-cards > div { border: 1px solid var(--border-color, #d1d8dd); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.cpc-control-center .cc-approval-cards label { font-size: 11px; text-transform: uppercase; color: var(--text-muted, #6c7680); margin: 0; }
+.cpc-control-center .cc-approval-cards small { color: var(--text-muted, #6c7680); }
+.cpc-control-center .cc-approval-cards .cc-summary-warn { border-color: #e08a00; background: rgba(224, 138, 0, 0.08); }
+.cpc-control-center .cc-approval-summary h4 { font-size: 12px; margin: 10px 0 4px; text-transform: uppercase; color: var(--text-muted, #6c7680); }
+.cpc-control-center .cc-approval-summary ul { margin: 0; padding-left: 18px; }
+.cpc-control-center .cc-approval-summary li { margin-bottom: 4px; }
+.cpc-control-center button.is-disabled { opacity: 0.55; cursor: not-allowed; }

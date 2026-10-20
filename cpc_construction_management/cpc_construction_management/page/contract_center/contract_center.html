@@ -286,6 +286,7 @@
 					</div>
 				</div>
 				<div class="hide" data-so-progress-view>
+					<div class="cc-approval-summary" data-so-approval-summary></div>
 					<div class="cc-subsection-heading">
 						<h3>{{ _("State Change Log") }}</h3>
 					</div>
@@ -305,7 +306,7 @@
 				</div>
 			</div>
 			<footer class="cc-modal-footer">
-				<span>{{ _("Sales Order is saved as Draft, then sent for approval.") }}</span>
+				<span data-so-footer-note>{{ _("Sales Order is saved as Draft, then sent for approval.") }}</span>
 				<div>
 					<button class="btn btn-default" data-close-modal="cc-sales-order-modal">
 						{{ _("Cancel") }}</button>
@@ -439,6 +440,7 @@
 							<col class="planner-col-pending" />
 							<col class="planner-col-consumed" />
 							<col class="planner-col-progress" />
+							<col class="planner-col-weekly" />
 							<col class="planner-col-actions" />
 						</colgroup>
 						<thead>
@@ -450,12 +452,13 @@
 								<th>{{ _("PENDING BUDGET") }}</th>
 								<th>{{ _("CONSUMED BUDGET") }}</th>
 								<th>{{ _("PROGRESS") }}</th>
+								<th>{{ _("WEEKLY PROGRESS") }}</th>
 								<th>{{ _("ACTIONS") }}</th>
 							</tr>
 						</thead>
 						<tbody data-planner-wbs-body>
 							<tr>
-								<td colspan="8" class="planner-empty">{{ _("Loading…") }}</td>
+								<td colspan="9" class="planner-empty">{{ _("Loading…") }}</td>
 							</tr>
 						</tbody>
 					</table>
@@ -476,6 +479,14 @@
 		</div>
 	</div>
 	<!-- /IRPO Planner overlay -->
+
+	<div class="cc-weekly-overlay hide" data-weekly-overlay aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="cc-weekly-title">
+		<header class="cc-weekly-header">
+			<h1 id="cc-weekly-title">{{ _("Weekly Progress") }}</h1>
+			<button type="button" class="btn btn-default" data-weekly-close>{{ _("Back to IRPO Planner") }}</button>
+		</header>
+		<div class="cc-weekly-content" data-weekly-content></div>
+	</div>
 
 	<!-- ========================================================= -->
 	<!-- Break IRPO Dialog                                          -->
