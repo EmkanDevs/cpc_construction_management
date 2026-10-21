@@ -1,0 +1,214 @@
+{
+ "doctype": "DocType",
+ "name": "CPC IRPO Scope Review",
+ "module": "Cpc Construction Management",
+ "custom": 0,
+ "istable": 0,
+ "issingle": 0,
+ "is_submittable": 0,
+ "track_changes": 1,
+ "quick_entry": 0,
+ "engine": "InnoDB",
+ "autoname": "naming_series:",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "irpo_task",
+ "field_order": [
+  "naming_series",
+  "irpo_task",
+  "parent_boq_task",
+  "status",
+  "column_break_1",
+  "requested_by",
+  "requested_on",
+  "reason",
+  "section_impact",
+  "impact_snapshot",
+  "section_review",
+  "reviewed_by",
+  "reviewed_on",
+  "review_notes",
+  "column_break_2",
+  "commercial_change_required",
+  "commercial_change_reference",
+  "commercial_change_approved",
+  "section_final",
+  "effective_date",
+  "finalized_by",
+  "finalized_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "CPC-SCR-.YYYY.-",
+   "default": "CPC-SCR-.YYYY.-",
+   "reqd": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "irpo_task",
+   "fieldtype": "Link",
+   "label": "IRPO",
+   "options": "Task",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only_depends_on": "eval:!doc.__islocal"
+  },
+  {
+   "fieldname": "parent_boq_task",
+   "fieldtype": "Link",
+   "label": "Parent BOQ Task",
+   "options": "Task",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending Review\nApproved\nRejected\nFinalized",
+   "default": "Pending Review",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Requested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Cancellation Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_impact",
+   "fieldtype": "Section Break",
+   "label": "Impact Snapshot (at request)",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "impact_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Impact Snapshot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_review",
+   "fieldtype": "Section Break",
+   "label": "Independent Review"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_notes",
+   "fieldtype": "Small Text",
+   "label": "Review Notes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "commercial_change_required",
+   "fieldtype": "Check",
+   "label": "Commercial Change Required",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commercial_change_reference",
+   "fieldtype": "Data",
+   "label": "Commercial Change Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "commercial_change_approved",
+   "fieldtype": "Check",
+   "label": "Commercial Change Approved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_final",
+   "fieldtype": "Section Break",
+   "label": "Finalisation"
+  },
+  {
+   "fieldname": "effective_date",
+   "fieldtype": "Date",
+   "label": "Effective Exclusion Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finalized_by",
+   "fieldtype": "Link",
+   "label": "Finalised By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finalized_on",
+   "fieldtype": "Datetime",
+   "label": "Finalised On",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "IRPO Progress Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  },
+  {
+   "role": "Projects User",
+   "read": 1
+  }
+ ]
+}

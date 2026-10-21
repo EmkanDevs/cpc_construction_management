@@ -9,7 +9,7 @@ frappe.ui.form.on("CPC Weekly Calendar", {
 
 		frm.add_custom_button(__("Generate Weeks"), () => {
 			frappe.confirm(
-				__("Generate all weeks for {0}? Existing weeks are never changed — this only fills in what's missing.", [frm.doc.week_year]),
+				__("Generate all weeks for {0}? Existing weeks are never changed - this only fills in what's missing.", [frm.doc.week_year]),
 				() => {
 					frm.call("generate_weeks").then((r) => {
 						frm.reload_doc();

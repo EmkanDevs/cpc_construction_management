@@ -14,7 +14,6 @@
  ],
  "fields": [
   {
-   "description": "ISO week-year. Generating weeks for this year may include a few late-December/early-January dates that fall in the adjacent Gregorian year \u2014 that is expected ISO behaviour.",
    "fieldname": "week_year",
    "fieldtype": "Int",
    "in_list_view": 1,
@@ -55,7 +54,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-15 11:00:24.400516",
+ "modified": "2026-10-15 13:52:32.864119",
  "modified_by": "Administrator",
  "module": "Cpc Construction Management",
  "name": "CPC Weekly Calendar",

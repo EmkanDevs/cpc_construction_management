@@ -1,43 +1,45 @@
 {
+ "actions": [],
+ "creation": "2026-09-25 13:04:36.164653",
  "doctype": "DocType",
- "name": "CPC Calendar Week",
- "module": "Cpc Construction Management",
- "custom": 0,
- "istable": 0,
- "issingle": 0,
- "quick_entry": 0,
- "track_changes": 1,
  "engine": "InnoDB",
- "sort_field": "start_date",
- "sort_order": "ASC",
+ "field_order": [
+  "weekly_calendar",
+  "week_year",
+  "week_number",
+  "column_break_1",
+  "start_date",
+  "end_date",
+  "display_label"
+ ],
  "fields": [
   {
    "fieldname": "weekly_calendar",
    "fieldtype": "Link",
-   "options": "CPC Weekly Calendar",
-   "label": "Weekly Calendar",
-   "reqd": 1,
-   "read_only": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "label": "Weekly Calendar",
+   "options": "CPC Weekly Calendar",
+   "read_only": 1,
+   "reqd": 1
   },
   {
    "fieldname": "week_year",
    "fieldtype": "Int",
-   "label": "ISO Week Year",
-   "reqd": 1,
-   "read_only": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "label": "Week Year",
+   "read_only": 1,
+   "reqd": 1
   },
   {
    "fieldname": "week_number",
    "fieldtype": "Int",
-   "label": "ISO Week Number",
-   "reqd": 1,
-   "read_only": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "label": "Week Number",
+   "read_only": 1,
+   "reqd": 1
   },
   {
    "fieldname": "column_break_1",
@@ -46,38 +48,49 @@
   {
    "fieldname": "start_date",
    "fieldtype": "Date",
-   "label": "Start Date (Monday)",
-   "reqd": 1,
+   "in_list_view": 1,
+   "label": "Start Date",
    "read_only": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "end_date",
    "fieldtype": "Date",
-   "label": "End Date / Week Ending (Sunday)",
-   "reqd": 1,
+   "in_list_view": 1,
+   "label": "End Date / Week Ending ",
    "read_only": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "display_label",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Display Label",
-   "read_only": 1,
-   "in_list_view": 1
+   "read_only": 1
   }
  ],
+ "links": [],
+ "modified": "2026-10-15 13:47:05.721652",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "CPC Calendar Week",
+ "owner": "Administrator",
  "permissions": [
   {
-   "role": "System Manager",
-   "read": 1,
-   "write": 1,
    "create": 1,
-   "delete": 1
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
   },
   {
-   "role": "IRPO Progress Approver",
-   "read": 1
+   "read": 1,
+   "role": "IRPO Progress Approver"
   }
- ]
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "start_date",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
 }
