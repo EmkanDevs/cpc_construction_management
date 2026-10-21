@@ -1,0 +1,364 @@
+/* Weekly Progress - IRPO Planner look. Works with the existing markup (no JS changes needed).
+   Selectors are prefixed with "html" so they beat the inline <style> in weekly_progress_view.js. */
+
+html [data-page-route="weekly-progress"],
+html .cc-weekly-content,
+html .wp-skin {
+	--wp-ink: #0f172a;
+	--wp-text: #334155;
+	--wp-muted: #64748b;
+	--wp-line: #e2e8f0;
+	--wp-line-strong: #cbd5e1;
+	--wp-head: #f1f5f9;
+	--wp-soft: #f8fafc;
+	--wp-dark: #111827;
+	--wp-green-dark: #16a34a;
+	--wp-amber: #b45309;
+	color: var(--wp-text);
+	font-size: .82rem;
+}
+
+html [data-page-route="weekly-progress"] .page-head {
+	background: #fff;
+	border-bottom: 1px solid var(--wp-line);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+}
+
+html [data-page-route="weekly-progress"] .page-head .title-text {
+	color: var(--wp-ink);
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+html [data-page-route="weekly-progress"] .page-body.container {
+	max-width: 100%;
+	width: 100%;
+}
+
+html [data-page-route="weekly-progress"] .wp-filters,
+html .cc-weekly-content .wp-filters,
+html .wp-skin .wp-filters {
+	align-items: end;
+	background: var(--wp-soft);
+	border: 1px solid var(--wp-line);
+	border-radius: 8px;
+	display: grid;
+	gap: 8px 12px;
+	grid-template-columns: minmax(180px, 1.2fr) 150px minmax(160px, 1fr) minmax(180px, 1.3fr) 160px;
+	margin: 10px 0 !important;
+	padding: 10px 14px;
+}
+
+html [data-page-route="weekly-progress"] .wp-filters > [class*="col-"],
+html .cc-weekly-content .wp-filters > [class*="col-"],
+html .wp-skin .wp-filters > [class*="col-"] {
+	flex: none;
+	max-width: none;
+	min-width: 0;
+	padding: 0;
+	width: auto;
+}
+
+html [data-page-route="weekly-progress"] .wp-filters .control-label,
+html .cc-weekly-content .wp-filters .control-label,
+html .wp-skin .wp-filters .control-label,
+html [data-page-route="weekly-progress"] .wp-filters label,
+html .cc-weekly-content .wp-filters label,
+html .wp-skin .wp-filters label {
+	color: var(--wp-text);
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+html [data-page-route="weekly-progress"] .form-group,
+html .cc-weekly-content .form-group,
+html .wp-skin .form-group,
+html [data-page-route="weekly-progress"] .frappe-control,
+html .cc-weekly-content .frappe-control,
+html .wp-skin .frappe-control {
+	margin-bottom: 0;
+}
+
+html [data-page-route="weekly-progress"] .form-control,
+html .cc-weekly-content .form-control,
+html .wp-skin .form-control,
+html [data-page-route="weekly-progress"] .like-disabled-input,
+html .cc-weekly-content .like-disabled-input,
+html .wp-skin .like-disabled-input {
+	background: #fff;
+	border: 1px solid var(--wp-line);
+	border-radius: 6px;
+	color: var(--wp-ink);
+	font-size: .82rem;
+	font-weight: 500;
+	height: 30px;
+	padding: 3px 8px;
+}
+
+html [data-page-route="weekly-progress"] .form-control:focus,
+html .cc-weekly-content .form-control:focus,
+html .wp-skin .form-control:focus {
+	border-color: var(--wp-line-strong);
+	box-shadow: 0 0 0 2px rgba(100, 116, 139, .15);
+}
+
+html [data-page-route="weekly-progress"] .wp-tabs,
+html .cc-weekly-content .wp-tabs,
+html .wp-skin .wp-tabs {
+	border-bottom: 1px solid var(--wp-line);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0 0 10px;
+	padding-bottom: 10px;
+}
+
+html [data-page-route="weekly-progress"] .wp-tabs .btn,
+html .cc-weekly-content .wp-tabs .btn,
+html .wp-skin .wp-tabs .btn {
+	background: #fff;
+	border: 1px solid var(--wp-line);
+	border-radius: 6px;
+	box-shadow: none;
+	color: var(--wp-muted);
+	font-size: .82rem;
+	font-weight: 600;
+	height: 30px;
+	line-height: 28px;
+	min-height: 0;
+	padding: 0 14px;
+}
+
+html [data-page-route="weekly-progress"] .wp-tabs .btn:hover,
+html .cc-weekly-content .wp-tabs .btn:hover,
+html .wp-skin .wp-tabs .btn:hover {
+	background: var(--wp-head);
+	color: var(--wp-ink);
+}
+
+html [data-page-route="weekly-progress"] .wp-tabs .btn.btn-primary,
+html .cc-weekly-content .wp-tabs .btn.btn-primary,
+html .wp-skin .wp-tabs .btn.btn-primary,
+html [data-page-route="weekly-progress"] .wp-tabs .btn.btn-primary:hover,
+html .cc-weekly-content .wp-tabs .btn.btn-primary:hover,
+html .wp-skin .wp-tabs .btn.btn-primary:hover {
+	background: var(--wp-dark);
+	border-color: var(--wp-dark);
+	color: #fff;
+}
+
+html [data-page-route="weekly-progress"] .wp-actions,
+html .cc-weekly-content .wp-actions,
+html .wp-skin .wp-actions {
+	margin: 0 0 10px !important;
+}
+
+html [data-page-route="weekly-progress"] .wp-actions .btn,
+html .cc-weekly-content .wp-actions .btn,
+html .wp-skin .wp-actions .btn,
+html [data-page-route="weekly-progress"] .wp-panel .btn,
+html .cc-weekly-content .wp-panel .btn,
+html .wp-skin .wp-panel .btn {
+	border-radius: 6px;
+	font-size: .82rem;
+	font-weight: 600;
+	height: 30px;
+	line-height: 28px;
+	margin-right: 6px;
+	padding: 0 14px;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel .btn-xs,
+html .cc-weekly-content .wp-panel .btn-xs,
+html .wp-skin .wp-panel .btn-xs {
+	font-size: .75rem;
+	height: 24px;
+	line-height: 22px;
+	padding: 0 8px;
+}
+
+html [data-page-route="weekly-progress"] .wp-actions .wp-save,
+html .cc-weekly-content .wp-actions .wp-save,
+html .wp-skin .wp-actions .wp-save {
+	background: #fff;
+	border: 1px solid var(--wp-line-strong);
+	color: var(--wp-text);
+}
+
+html [data-page-route="weekly-progress"] .wp-actions .wp-save:hover,
+html .cc-weekly-content .wp-actions .wp-save:hover,
+html .wp-skin .wp-actions .wp-save:hover {
+	background: var(--wp-head);
+}
+
+html [data-page-route="weekly-progress"] .wp-actions .wp-send,
+html .cc-weekly-content .wp-actions .wp-send,
+html .wp-skin .wp-actions .wp-send,
+html [data-page-route="weekly-progress"] .wp-panel [data-i],
+html .cc-weekly-content .wp-panel [data-i],
+html .wp-skin .wp-panel [data-i] {
+	background: var(--wp-dark);
+	border: 1px solid var(--wp-dark);
+	color: #fff;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel [data-approve],
+html .cc-weekly-content .wp-panel [data-approve],
+html .wp-skin .wp-panel [data-approve],
+html [data-page-route="weekly-progress"] .wp-panel [data-sr-approve],
+html .cc-weekly-content .wp-panel [data-sr-approve],
+html .wp-skin .wp-panel [data-sr-approve] {
+	background: var(--wp-green-dark);
+	border: 1px solid var(--wp-green-dark);
+	color: #fff;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel [data-return],
+html .cc-weekly-content .wp-panel [data-return],
+html .wp-skin .wp-panel [data-return],
+html [data-page-route="weekly-progress"] .wp-panel [data-sr-reject],
+html .cc-weekly-content .wp-panel [data-sr-reject],
+html .wp-skin .wp-panel [data-sr-reject] {
+	background: #fff;
+	border: 1px solid #fed7aa;
+	color: var(--wp-amber);
+}
+
+html [data-page-route="weekly-progress"] .wp-panel [data-correct],
+html .cc-weekly-content .wp-panel [data-correct],
+html .wp-skin .wp-panel [data-correct],
+html [data-page-route="weekly-progress"] .wp-panel [data-sr-comm],
+html .cc-weekly-content .wp-panel [data-sr-comm],
+html .wp-skin .wp-panel [data-sr-comm] {
+	background: #fff;
+	border: 1px solid var(--wp-line-strong);
+	color: var(--wp-text);
+}
+
+html [data-page-route="weekly-progress"] .wp-panel .btn:disabled,
+html .cc-weekly-content .wp-panel .btn:disabled,
+html .wp-skin .wp-panel .btn:disabled {
+	opacity: .5;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel > div[style*="overflow-x"],
+html .cc-weekly-content .wp-panel > div[style*="overflow-x"],
+html .wp-skin .wp-panel > div[style*="overflow-x"] {
+	border: 1px solid var(--wp-line);
+	border-radius: 8px;
+	background: #fff;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel > table,
+html .cc-weekly-content .wp-panel > table,
+html .wp-skin .wp-panel > table,
+html [data-page-route="weekly-progress"] .wp-results > table,
+html .cc-weekly-content .wp-results > table,
+html .wp-skin .wp-results > table {
+	background: #fff;
+	border: 1px solid var(--wp-line);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+html [data-page-route="weekly-progress"] table,
+html .cc-weekly-content table,
+html .wp-skin table {
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: .82rem;
+	margin: 0;
+}
+
+html [data-page-route="weekly-progress"] table.table-bordered,
+html .cc-weekly-content table.table-bordered,
+html .wp-skin table.table-bordered {
+	border: 0;
+}
+
+html [data-page-route="weekly-progress"] .wp-panel > div[style*="overflow-x"] > table,
+html .cc-weekly-content .wp-panel > div[style*="overflow-x"] > table,
+html .wp-skin .wp-panel > div[style*="overflow-x"] > table {
+	border: 0;
+}
+
+html [data-page-route="weekly-progress"] table th,
+html .cc-weekly-content table th,
+html .wp-skin table th {
+	background: var(--wp-head);
+	border: 0;
+	border-bottom: 2px solid var(--wp-line-strong);
+	color: #475569;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .04em;
+	line-height: 17px;
+	padding: 8px 10px;
+	text-transform: uppercase;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+html [data-page-route="weekly-progress"] table td,
+html .cc-weekly-content table td,
+html .wp-skin table td {
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--wp-line);
+	color: var(--wp-text);
+	padding: 7px 10px;
+	vertical-align: middle;
+}
+
+html [data-page-route="weekly-progress"] table tbody tr:hover,
+html .cc-weekly-content table tbody tr:hover,
+html .wp-skin table tbody tr:hover {
+	background: var(--wp-soft);
+}
+
+html [data-page-route="weekly-progress"] table td b,
+html .cc-weekly-content table td b,
+html .wp-skin table td b {
+	color: var(--wp-ink);
+	font-weight: 600;
+}
+
+html [data-page-route="weekly-progress"] table td input.form-control,
+html .cc-weekly-content table td input.form-control,
+html .wp-skin table td input.form-control,
+html [data-page-route="weekly-progress"] table td input[type="date"],
+html .cc-weekly-content table td input[type="date"],
+html .wp-skin table td input[type="date"] {
+	height: 28px;
+	min-width: 90px;
+}
+
+html [data-page-route="weekly-progress"] table td a,
+html .cc-weekly-content table td a,
+html .wp-skin table td a {
+	color: var(--wp-muted);
+	font-size: .78rem;
+}
+
+html [data-page-route="weekly-progress"] table td a:hover,
+html .cc-weekly-content table td a:hover,
+html .wp-skin table td a:hover {
+	color: var(--wp-ink);
+}
+
+html [data-page-route="weekly-progress"] table td .text-muted,
+html .cc-weekly-content table td .text-muted,
+html .wp-skin table td .text-muted,
+html [data-page-route="weekly-progress"] table td small,
+html .cc-weekly-content table td small,
+html .wp-skin table td small {
+	color: #94a3b8 !important;
+	font-size: .72rem;
+}
+
+html [data-page-route="weekly-progress"] table input[type="checkbox"],
+html .cc-weekly-content table input[type="checkbox"],
+html .wp-skin table input[type="checkbox"] {
+	accent-color: var(--wp-dark);
+}

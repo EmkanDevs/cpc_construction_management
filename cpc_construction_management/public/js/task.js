@@ -1,4 +1,5 @@
 
+
 // frappe.ui.form.on('Task', {
 // 	refresh(frm) {
 // 		if (frm.doc.cpc_is_irpo && !frm.doc.is_group && !frm.is_new()) {
@@ -9,6 +10,13 @@
 // 			frm.add_custom_button(__('Purchase Order'), () => {
 // 				create_po_from_irpo(frm);
 // 			}, __('Create'));
+
+// 			// NEW: only shown when the Task already has unplanned rows
+// 			if ((frm.doc.custom_irpo_unplanned_item || []).length) {
+// 				frm.add_custom_button(__('Material Request (Unplanned)'), () => {
+// 					create_mr_from_unplanned(frm);
+// 				}, __('Create'));
+// 			}
 // 		}
 // 	}
 // });
@@ -30,6 +38,26 @@
 // 	frappe.call({
 // 		method: "cpc_construction_management.cpc_construction_management.budget.irpo_budget.make_purchase_order",
 // 		args: { irpo: frm.doc.name },
+// 		callback: (r) => {
+// 			if (r.message) {
+// 				frappe.model.sync(r.message);
+// 				frappe.set_route("Form", r.message.doctype, r.message.name);
+// 			}
+// 		}
+// 	});
+// }
+
+// // NEW: Create Material Request from the Unplanned Items / Services table
+// function create_mr_from_unplanned(frm) {
+// 	if (frm.is_dirty()) {
+// 		frappe.msgprint(__('Save the Task first so every unplanned row has its reference.'));
+// 		return;
+// 	}
+// 	const rows = frm.fields_dict.custom_irpo_unplanned_item.grid
+// 		.get_selected_children().map((r) => r.name);
+// 	frappe.call({
+// 		method: "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.make_material_request_from_unplanned",
+// 		args: { task: frm.doc.name, rows: rows.length ? rows : null },
 // 		callback: (r) => {
 // 			if (r.message) {
 // 				frappe.model.sync(r.message);
@@ -797,6 +825,20 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+const CPC_HOLD_CONTROLS = "cpc_construction_management.cpc_construction_management.progress.hold_controls.";
+
 frappe.ui.form.on('Task', {
 	refresh(frm) {
 		if (frm.doc.cpc_is_irpo && !frm.doc.is_group && !frm.is_new()) {
@@ -814,9 +856,54 @@ frappe.ui.form.on('Task', {
 					create_mr_from_unplanned(frm);
 				}, __('Create'));
 			}
+
+			// Hold / Resume (reporting status). Shows "Hold" when active, "Resume" when on Hold.
+			add_hold_resume_button(frm);
 		}
 	}
 });
+
+function add_hold_resume_button(frm) {
+	frappe.call({
+		method: CPC_HOLD_CONTROLS + "get_current_state",
+		args: { task: frm.doc.name },
+	}).then((r) => {
+		const event = r.message === "Hold" ? "Resume" : "Hold";
+		frm.add_custom_button(__(event), () => {
+			frappe.prompt([
+				{
+					fieldname: "effective_date",
+					label: __("Effective Date"),
+					fieldtype: "Date",
+					default: frappe.datetime.get_today(),
+					reqd: 1,
+				},
+				{
+					fieldname: "reason",
+					label: __("Reason"),
+					fieldtype: "Small Text",
+					reqd: 1,
+				},
+			], (v) => {
+				frappe.call({
+					method: CPC_HOLD_CONTROLS + "record_status_event",
+					args: {
+						task: frm.doc.name,
+						event: event,
+						effective_date: v.effective_date,
+						reason: v.reason,
+					},
+				}).then(() => {
+					frappe.show_alert({
+						message: event === "Hold" ? __("IRPO put on Hold") : __("IRPO resumed"),
+						indicator: event === "Hold" ? "orange" : "green",
+					});
+					frm.reload_doc();
+				});
+			}, __("{0} IRPO", [event]), __(event));
+		}, __("Reporting Status"));
+	});
+}
 
 function create_mr_from_irpo(frm) {
 	frappe.call({
