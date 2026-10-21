@@ -518,7 +518,7 @@ def get_irpo_items_for_purchase_order(project, irpo_tasks=None, budget_row_refs=
 		for task_name in irpo_tasks:
 			task = validate_irpo_is_usable(task_name, project=project)
 			if not task.account:
-				frappe.throw(_("IRPO {0} has no Expense Account set — cannot be used for a direct PO.").format(task_name))
+				frappe.throw(_("IRPO {0} has no Expense Account set - cannot be used for a direct PO.").format(task_name))
 			for row in task.get(PLANNED_FIELD) or []:
 				if not _row_item(row):
 					continue
@@ -536,7 +536,7 @@ def get_irpo_items_for_purchase_order(project, irpo_tasks=None, budget_row_refs=
 		for task_name, refs in by_parent.items():
 			task = validate_irpo_is_usable(task_name, project=project)
 			if not task.account:
-				frappe.throw(_("IRPO {0} has no Expense Account set — cannot be used for a direct PO.").format(task_name))
+				frappe.throw(_("IRPO {0} has no Expense Account set - cannot be used for a direct PO.").format(task_name))
 			matched = set()
 			# Item-level selection: the ref may be a planned or an unplanned row.
 			for cfg in ITEM_TYPES.values():
@@ -593,7 +593,7 @@ def validate_direct_po_linkage(doc, method=None):
 		task_name = row.get("task")
 		if not task_name:
 			frappe.throw(
-				_("Row {0}: has an IRPO Budget Row Ref but no Task — invalid IRPO linkage.").format(row.idx)
+				_("Row {0}: has an IRPO Budget Row Ref but no Task - invalid IRPO linkage.").format(row.idx)
 			)
 
 		task = frappe.db.get_value(
@@ -646,7 +646,7 @@ def validate_direct_po_linkage(doc, method=None):
 
 @frappe.whitelist()
 def get_irpo_task_names_for_project(project):
-	"""Feeds the item-level dialog's list query — only eligible IRPO Tasks."""
+	"""Feeds the item-level dialog's list query - only eligible IRPO Tasks."""
 	return frappe.get_all(
 		"Task",
 		filters={
