@@ -463,7 +463,7 @@ def make_material_request_from_unplanned(task, rows=None):
         mr.append("items", {
             "item_code": r.item, "item_name": r.item_name, "uom": r.uom, "stock_uom": r.uom, "qty": qty,
             "schedule_date": mr.schedule_date, "project": t.project, "task": t.name, "cpc_irpo": t.name,
-            "cpc_irpo_unplanned_row_ref": r.unplanned_row_ref, "expense_account": t.account,
+            "cpc_irpo_unplanned_row_ref": r.unplanned_row_ref, "expense_account": t.account, "custom_irpo_item_type":r.irpo_item_type,
         })
     if not mr.items:
         frappe.throw(_("No Unplanned Items with available quantity remain on IRPO {0}. Nothing to request.").format(task))

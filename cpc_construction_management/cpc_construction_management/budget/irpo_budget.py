@@ -410,6 +410,7 @@ def make_material_request(irpo):
             "cpc_irpo_budget_row_ref": row.name,
             "schedule_date": task.exp_end_date or nowdate(),
             "expense_account": task.account,
+			"custom_irpo_item_type":row.irpo_item_type,
         })
 
     if not mr.items:
