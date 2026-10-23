@@ -145,6 +145,9 @@ doc_events = {
             "cpc_construction_management.cpc_construction_management.doc_events.task.validate_irpo_task",
             "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.validate_unplanned_rows",
         ],
+        "on_update": [
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.log_unplanned_revisions",
+        ],
     },
     "Material Request": {
         "validate": [
@@ -158,6 +161,7 @@ doc_events = {
             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
             "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.validate_task_mr_available",
         ],
         "on_submit": [
             "cpc_construction_management.cpc_construction_management.doc_events.material_request.on_submit_material_request",
