@@ -19,7 +19,7 @@ REQUIRED_TASK_FIELDS = (
 
 SETUP_COMMAND = (
 	"bench --site <site> execute "
-	"cpc_construction_management.cpc_construction_management.setup.custom_fields.irpo_reporting_fields.execute"
+	"cpc_construction_management.cpc_construction_management.setup.irpo_reporting_fields.execute"
 )
 
 

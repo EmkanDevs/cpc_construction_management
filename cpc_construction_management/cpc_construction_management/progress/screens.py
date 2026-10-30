@@ -442,7 +442,7 @@ def _irpos(project=None, irpo_task=None, boq_parent=None, search=None, status=No
     if status:
         filters["status"] = status
     or_filters = [["name", "like", f"%{search}%"], ["subject", "like", f"%{search}%"]] if search else None
-    return frappe.get_all("Task", filters=filters, or_filters=or_filters, order_by="parent_task, name", limit=limit,
+    return frappe.get_list("Task", filters=filters, or_filters=or_filters, order_by="parent_task, name", limit=limit,
                           fields=["name", "subject", "parent_task", "status", "exp_start_date", "progress"])
 
 
@@ -509,6 +509,7 @@ def _default_cutoff(week_start, cutoff, intervals):
 
 @frappe.whitelist()
 def get_entry_rows(project, calendar_week, boq_parent=None, search=None, status=None):
+    frappe.has_permission(PROGRESS, "read", throw=True)
     week = _week(calendar_week)
     today = getdate(nowdate())
     if getdate(week.start_date) > today:
@@ -522,11 +523,11 @@ def get_entry_rows(project, calendar_week, boq_parent=None, search=None, status=
     records = {}
     prev = {}
     if names:
-        for r in frappe.get_all(PROGRESS, filters={"irpo_task": ["in", names], "calendar_week": calendar_week, "docstatus": ["<", 2]}, fields=RECORD_FIELDS):
+        for r in frappe.get_list(PROGRESS, filters={"irpo_task": ["in", names], "calendar_week": calendar_week, "docstatus": ["<", 2]}, fields=RECORD_FIELDS, limit_page_length=0):
             records[r.irpo_task] = r
-        for r in frappe.get_all(PROGRESS, filters={"irpo_task": ["in", names], "docstatus": 1, "week_start_date": ["<", week.start_date]},
+        for r in frappe.get_list(PROGRESS, filters={"irpo_task": ["in", names], "docstatus": 1, "week_start_date": ["<", week.start_date]},
                                 fields=["irpo_task", "calendar_week", "week_start_date", "cum_completed_qty", "cum_percent"],
-                                order_by="week_start_date asc"):
+                                order_by="week_start_date asc", limit_page_length=0):
             prev[r.irpo_task] = r   # ascending order: the last one is the nearest earlier approved
 
     rows = []
@@ -578,6 +579,7 @@ def get_entry_rows(project, calendar_week, boq_parent=None, search=None, status=
 
 @frappe.whitelist()
 def get_outstanding_weeks(project=None, irpo_task=None, boq_parent=None, max_weeks=52):
+    frappe.has_permission(PROGRESS, "read", throw=True)
     today = getdate(nowdate())
     has_wf = _has_workflow()
     weeks = frappe.get_all("CPC Calendar Week", filters={"start_date": ["<=", today]},
@@ -588,9 +590,9 @@ def get_outstanding_weeks(project=None, irpo_task=None, boq_parent=None, max_wee
         anchor = _anchor_week_start(t.name)
         if not anchor:
             continue
-        recs = {r.calendar_week: r for r in frappe.get_all(
+        recs = {r.calendar_week: r for r in frappe.get_list(
             PROGRESS, filters={"irpo_task": t.name, "docstatus": ["<", 2]},
-            fields=["calendar_week", "docstatus", "workflow_state", "sent_for_approval_on"])}
+            fields=["calendar_week", "docstatus", "workflow_state", "sent_for_approval_on"], limit_page_length=0)}
         iv, windows = hold_intervals(t.name), get_reporting_windows(t.name)
         for w in weeks:
             ps, pe = _bounds(w)
@@ -639,6 +641,7 @@ def save_rows(calendar_week, rows, send_for_approval=0):
         key = r.get("irpo_task")
         frappe.db.savepoint("row")
         try:
+            frappe.has_permission("Task", "read", key, throw=True)
             name = frappe.db.get_value(PROGRESS, {"irpo_task": key, "calendar_week": calendar_week, "docstatus": ["<", 2]}, "name")
             if name:
                 doc = frappe.get_doc(PROGRESS, name)
@@ -678,8 +681,8 @@ def save_rows(calendar_week, rows, send_for_approval=0):
 
 @frappe.whitelist()
 def get_approval_queue(project=None):
+    frappe.has_permission(PROGRESS, "read", throw=True)
     has_workflow = _has_workflow()
-    is_admin = frappe.session.user == "Administrator"
     filters = {"docstatus": 0}
     if has_workflow:
         filters["workflow_state"] = "Pending Approval"
@@ -688,9 +691,9 @@ def get_approval_queue(project=None):
     if project:
         filters["project"] = project
     out = []
-    for r in frappe.get_all(PROGRESS, filters=filters, order_by="week_start_date asc, modified asc",
+    for r in frappe.get_list(PROGRESS, filters=filters, order_by="week_start_date asc, modified asc",
             fields=RECORD_FIELDS + ["project", "week_start_date", "week_ending", "owner", "entered_by", "last_material_editor",
-                                    "previous_progress_reference"]):
+                                    "previous_progress_reference"], limit_page_length=0):
         later = frappe.db.count(PROGRESS, {"irpo_task": r.irpo_task, "docstatus": 1, "week_start_date": [">", r.week_start_date]})
         live_base = None
         try:
@@ -698,7 +701,7 @@ def get_approval_queue(project=None):
         except Exception:
             frappe.clear_messages()
         # The workflow decides who may approve: allowed if a transition to an approved state is open to this user.
-        can_approve = bool(_pick_action(frappe.get_doc(PROGRESS, r.name), lambda nxt, ds: ds == "1")) if has_workflow else is_admin
+        can_approve = bool(_pick_action(frappe.get_doc(PROGRESS, r.name), lambda nxt, ds: ds == "1")) if has_workflow else False
         flags = []
         if later:
             flags.append(_("Late entry: later approved measurements exist; their increments will be recalculated."))
@@ -715,13 +718,7 @@ def get_approval_queue(project=None):
 def approve_record(name):
     doc = frappe.get_doc(PROGRESS, name)
     if not _has_workflow():
-        # No workflow configured: only Administrator may approve, by submitting the record directly.
-        if frappe.session.user != "Administrator":
-            frappe.throw(_("No workflow is active for IRPO Progress. Only Administrator can approve until one is set up."))
-        if doc.docstatus != 0 or not doc.sent_for_approval_on:
-            frappe.throw(_("Only a record sent for approval can be approved."))
-        doc.submit()
-        return {"name": doc.name, "state": "Approved", "docstatus": doc.docstatus}
+        frappe.throw(_("No workflow is active for IRPO Progress. Run the CPC migration before approving records."))
     if doc.docstatus != 0 or doc.workflow_state != "Pending Approval":
         frappe.throw(_("Only a record in Pending Approval can be approved."))
     action = _pick_action(doc, lambda nxt, ds: ds == "1")
@@ -735,13 +732,15 @@ def approve_record(name):
 
 @frappe.whitelist()
 def get_irpo_history(irpo_task):
+    frappe.has_permission(PROGRESS, "read", throw=True)
     from .quantity_revision import get_base_at
 
     task = frappe.get_doc("Task", irpo_task)
-    records = frappe.get_all(PROGRESS, filters={"irpo_task": irpo_task, "docstatus": ["<", 3]}, order_by="week_start_date asc, creation asc",
+    task.check_permission("read")
+    records = frappe.get_list(PROGRESS, filters={"irpo_task": irpo_task, "docstatus": ["<", 3]}, order_by="week_start_date asc, creation asc",
         fields=["name", "calendar_week", "week_start_date", "docstatus", "workflow_state", "cum_completed_qty", "cum_percent",
                 "base_qty_snapshot", "prev_completed_qty_snapshot", "period_completed_qty_snapshot", "period_percent_same_base",
-                "measurement_cutoff_date", "approved_by", "approved_on", "cancellation_reason", "amended_from", "return_reason"])
+                "measurement_cutoff_date", "approved_by", "approved_on", "cancellation_reason", "amended_from", "return_reason"], limit_page_length=0)
     windows = get_reporting_windows(irpo_task)
     live_base = None
     try:
@@ -751,9 +750,9 @@ def get_irpo_history(irpo_task):
     revisions = [{"posting_date": str(r["posting_date"]), "revision_no": r["revision_no"], "before": r["budget_qty_before"], "after": r["budget_qty_after"], "ref": r["name"]}
                  for r in revision_rows(irpo_task)]
     events = status_events(irpo_task)
-    reviews = frappe.get_all("CPC IRPO Scope Review", filters={"irpo_task": irpo_task}, order_by="creation desc",
+    reviews = frappe.get_list("CPC IRPO Scope Review", filters={"irpo_task": irpo_task}, order_by="creation desc",
         fields=["name", "status", "reason", "requested_by", "requested_on", "reviewed_by", "review_notes",
-                "commercial_change_required", "commercial_change_approved", "commercial_change_reference", "effective_date"])
+                "commercial_change_required", "commercial_change_approved", "commercial_change_reference", "effective_date"], limit_page_length=0)
     return {
         "irpo": irpo_task, "subject": task.subject, "task_status": task.status, "progress": task.get("progress"),
         "live_base": live_base, "records": records, "revisions": revisions,

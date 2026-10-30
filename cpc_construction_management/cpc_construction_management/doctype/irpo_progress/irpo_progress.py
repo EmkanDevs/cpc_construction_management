@@ -387,6 +387,8 @@ from frappe.model.document import Document
 from frappe.utils import flt, getdate, now_datetime, nowdate
 
 from cpc_construction_management.cpc_construction_management.progress.approval_rules import (
+	APPROVER_ROLE,
+	approval_block_reason,
 	is_stale_base,
 )
 from cpc_construction_management.cpc_construction_management.progress.calculation import (
@@ -494,8 +496,20 @@ class IRPOProgress(Document):
 			self.active_key = f"{self.irpo_task}::{self.calendar_week}"
 
 	def before_submit(self):
-		# Submitting IS the approval. Who may approve, from which state, and whether the
-		# creator may approve their own record are decided by the Workflow configuration.
+		before = self.get_doc_before_save()
+		if not before or before.workflow_state != "Pending Approval":
+			frappe.throw("Only a record in Pending Approval can be approved.")
+
+		verdict = approval_block_reason(
+			frappe.session.user,
+			frappe.get_roles(frappe.session.user),
+			(self.owner, self.entered_by, self.last_material_editor),
+		)
+		if verdict == "not_approver":
+			frappe.throw(f"Only a user with the {APPROVER_ROLE} role can approve progress.")
+		if verdict == "not_independent":
+			frappe.throw("You created or last edited this measurement, so you cannot approve it.")
+
 		self.approved_by = frappe.session.user
 		self.approved_on = now_datetime()
 
