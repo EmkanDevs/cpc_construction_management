@@ -1,5 +1,4 @@
 
-
 # import frappe
 # from frappe import _
 # from frappe.utils import flt
@@ -58,6 +57,21 @@
 # 	return None
 
 
+# def _unplanned_available(row_qty, row_available):
+# 	"""Available qty suggested for an UNPLANNED row.
+
+# 	Unplanned rows are created with qty = 0, meaning "no expected qty entered".
+# 	In that case there is no budget to subtract from, so suggest 1 and let the
+# 	user edit the quantity on the PO. When an expected qty was entered, use the
+# 	row's own IRPO Available Qty (falling back to the expected qty itself).
+# 	"""
+# 	if not flt(row_qty):
+# 		return 1.0
+# 	if row_available is None:
+# 		return flt(row_qty)
+# 	return flt(row_available)
+
+
 # @frappe.whitelist()
 # def search_irpo_item_rows(
 # 	project, irpo=None, item_code=None, txt=None, item_type="Planned", start=0, limit=200
@@ -76,11 +90,23 @@
 
 # 	cfg = ITEM_TYPES[item_type]
 # 	child_dt = cfg["doctype"]
+# 	is_unplanned = item_type == "Unplanned"
 # 	item_col = _item_col(child_dt)
 # 	if not item_col:
 # 		frappe.throw(_("{0} has no Item field.").format(child_dt))
 # 	uom_col = _first_field(child_dt, ("uom",))
 # 	uom_sql = f"c.`{uom_col}`" if uom_col else "i.stock_uom"
+
+# 	# Unplanned rows: the real reference lives in `unplanned_row_ref`, and the
+# 	# per-row available qty (if the column exists) in `irpo_available_qty`.
+# 	extra_cols = ""
+# 	if is_unplanned:
+# 		meta = frappe.get_meta(child_dt)
+# 		extra_cols += "c.unplanned_row_ref as cpc_irpo_unplanned_row_ref,\n\t\t\t"
+# 		if meta.has_field("irpo_available_qty"):
+# 			extra_cols += "c.irpo_available_qty as row_available_qty,\n\t\t\t"
+# 		else:
+# 			extra_cols += "null as row_available_qty,\n\t\t\t"
 
 # 	conditions = [
 # 		"t.cpc_is_irpo = 1",
@@ -118,8 +144,9 @@
 # 			t.subject as task_subject,
 # 			t.project as project,
 # 			t.cpc_budget_amount as irpo_budget_amount,
+# 			c.name as row_name,
 # 			c.name as cpc_irpo_budget_row_ref,
-# 			c.`{item_col}` as item_code,
+# 			{extra_cols}c.`{item_col}` as item_code,
 # 			i.item_name as item_name,
 # 			{uom_sql} as uom,
 # 			c.qty as budget_qty
@@ -139,15 +166,25 @@
 
 # 	# Same formula as _build_row, so the popup and the fetched qty always agree.
 # 	for r in rows:
-# 		r["available_qty"] = flt(r.budget_qty) - flt(
-# 			get_controlled_qty(r.irpo, r.cpc_irpo_budget_row_ref)
-# 		)
+# 		if is_unplanned:
+# 			# Unplanned rows are NOT tracked by the planned budget-row-ref engine.
+# 			r["cpc_irpo_budget_row_ref"] = ""
+# 			r["available_qty"] = _unplanned_available(r.budget_qty, r.get("row_available_qty"))
+# 		else:
+# 			r["available_qty"] = flt(r.budget_qty) - flt(
+# 				get_controlled_qty(r.irpo, r.cpc_irpo_budget_row_ref)
+# 			)
 
 # 	return rows
 
 
 # @frappe.whitelist()
 # def get_irpo_items_for_purchase_order(project, irpo_tasks=None, budget_row_refs=None):
+# 	"""Return PO row data.
+
+# 	`budget_row_refs` holds CHILD ROW NAMES (row_name from the popup). A name may
+# 	belong to a planned (Item Table) or an unplanned (IRPO Unplanned Item) row.
+# 	"""
 # 	if isinstance(irpo_tasks, str):
 # 		irpo_tasks = frappe.parse_json(irpo_tasks)
 # 	if isinstance(budget_row_refs, str):
@@ -163,7 +200,7 @@
 # 		for task_name in irpo_tasks:
 # 			task = validate_irpo_is_usable(task_name, project=project)
 # 			if not task.account:
-# 				frappe.throw(_("IRPO {0} has no Expense Account set — cannot be used for a direct PO.").format(task_name))
+# 				frappe.throw(_("IRPO {0} has no Expense Account set - cannot be used for a direct PO.").format(task_name))
 # 			for row in task.get(PLANNED_FIELD) or []:
 # 				if not _row_item(row):
 # 					continue
@@ -181,7 +218,7 @@
 # 		for task_name, refs in by_parent.items():
 # 			task = validate_irpo_is_usable(task_name, project=project)
 # 			if not task.account:
-# 				frappe.throw(_("IRPO {0} has no Expense Account set — cannot be used for a direct PO.").format(task_name))
+# 				frappe.throw(_("IRPO {0} has no Expense Account set - cannot be used for a direct PO.").format(task_name))
 # 			matched = set()
 # 			# Item-level selection: the ref may be a planned or an unplanned row.
 # 			for cfg in ITEM_TYPES.values():
@@ -199,15 +236,23 @@
 
 
 # def _build_row(task, row):
-# 	controlled_qty = get_controlled_qty(task.name, row.name)
+# 	unplanned = row.doctype == UNPLANNED_DOCTYPE
+# 	if unplanned:
+# 		available = _unplanned_available(row.get("qty"), row.get("irpo_available_qty") if row.get("irpo_available_qty") not in (None, "") else None)
+# 	else:
+# 		available = flt(row.qty) - get_controlled_qty(task.name, row.name)
+
 # 	return {
 # 		"project": task.project,
 # 		"task": task.name,
 # 		"item_code": _row_item(row),
 # 		"uom": _row_uom(row),
 # 		"budget_qty": row.qty,
-# 		"available_qty": flt(row.qty) - controlled_qty,
-# 		"cpc_irpo_budget_row_ref": row.name,
+# 		"available_qty": available,
+# 		# Planned rows carry the child row name; unplanned rows carry their own
+# 		# IRPO-UPL-##### reference in a separate field, never in the budget ref.
+# 		"cpc_irpo_budget_row_ref": "" if unplanned else row.name,
+# 		"cpc_irpo_unplanned_row_ref": row.get("unplanned_row_ref") if unplanned else "",
 # 		"expense_account": task.account,
 # 	}
 
@@ -218,16 +263,19 @@
 # 	has filled blanks, so this re-checks what actually ended up on the row —
 # 	closing the gap where API/import/browser manipulation could set an
 # 	inconsistent project/task/budget-row/account combination.
+
+# 	Applies to PLANNED rows (those with cpc_irpo_budget_row_ref). Unplanned rows
+# 	are skipped here, as before.
 # 	"""
 # 	for row in doc.get("items") or []:
 # 		budget_row_ref = row.get("cpc_irpo_budget_row_ref")
 # 		if not budget_row_ref:
-# 			continue  # not an IRPO-linked row, nothing to check
+# 			continue  # not a planned IRPO-linked row, nothing to check
 
 # 		task_name = row.get("task")
 # 		if not task_name:
 # 			frappe.throw(
-# 				_("Row {0}: has an IRPO Budget Row Ref but no Task — invalid IRPO linkage.").format(row.idx)
+# 				_("Row {0}: has an IRPO Budget Row Ref but no Task - invalid IRPO linkage.").format(row.idx)
 # 			)
 
 # 		task = frappe.db.get_value(
@@ -280,7 +328,7 @@
 
 # @frappe.whitelist()
 # def get_irpo_task_names_for_project(project):
-# 	"""Feeds the item-level dialog's list query — only eligible IRPO Tasks."""
+# 	"""Feeds the item-level dialog's list query - only eligible IRPO Tasks."""
 # 	return frappe.get_all(
 # 		"Task",
 # 		filters={
@@ -291,14 +339,6 @@
 # 		},
 # 		pluck="name",
 # 	)
-
-
-
-
-
-
-
-
 
 
 
@@ -375,19 +415,17 @@ def _get_budget_row(ref):
 	return None
 
 
-def _unplanned_available(row_qty, row_available):
+def _unplanned_available(row_qty, row_available):  # [UAT-2]
 	"""Available qty suggested for an UNPLANNED row.
 
-	Unplanned rows are created with qty = 0, meaning "no expected qty entered".
-	In that case there is no budget to subtract from, so suggest 1 and let the
-	user edit the quantity on the PO. When an expected qty was entered, use the
-	row's own IRPO Available Qty (falling back to the expected qty itself).
+	A Direct PO may only draw on the row's IRPO Available Qty (Total Unplanned Qty
+	minus MR/PO/PR/PI quantities). Never suggest more than that: the PO is blocked at
+	submit when it exceeds Available. If the Available column does not exist on the
+	child doctype, fall back to the row's own qty.
 	"""
-	if not flt(row_qty):
-		return 1.0
 	if row_available is None:
-		return flt(row_qty)
-	return flt(row_available)
+		return max(flt(row_qty), 0.0)
+	return max(flt(row_available), 0.0)
 
 
 @frappe.whitelist()
@@ -433,6 +471,9 @@ def search_irpo_item_rows(
 		"t.project = %(project)s",
 		f"ifnull(c.`{item_col}`, '') != ''",
 	]
+	# [UAT-2] a Direct PO can only draw on IRPO Available Qty: hide exhausted unplanned rows
+	if is_unplanned and frappe.get_meta(child_dt).has_field("irpo_available_qty"):
+		conditions.append("ifnull(c.irpo_available_qty, 0) > 0")
 	values = {
 		"project": project,
 		"parentfield": cfg["field"],
@@ -583,7 +624,8 @@ def validate_direct_po_linkage(doc, method=None):
 	inconsistent project/task/budget-row/account combination.
 
 	Applies to PLANNED rows (those with cpc_irpo_budget_row_ref). Unplanned rows
-	are skipped here, as before.
+	are skipped here, as before; their Direct PO quantity is checked against
+	IRPO Available Qty in irpo_unplanned.validate_direct_po_available (before_submit).
 	"""
 	for row in doc.get("items") or []:
 		budget_row_ref = row.get("cpc_irpo_budget_row_ref")

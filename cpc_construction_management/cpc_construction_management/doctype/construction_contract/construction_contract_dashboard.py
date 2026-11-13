@@ -17,6 +17,9 @@ def get_data():
 		"non_standard_fieldnames": {
 			"Project": "cpc_source_contract",
 		},
+		"internal_and_external_links": {
+			"Project": "project",
+		},
 		"transactions": [
 			{"label": _("Project & Orders"), "items": ["Project", "Sales Order"]},
 		],

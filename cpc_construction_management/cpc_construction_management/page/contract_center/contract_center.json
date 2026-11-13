@@ -1,16 +1,20 @@
 {
  "content": null,
- "creation": "2026-09-10 14:00:18.598537",
+ "creation": "2026-09-10 14:27:05.718246",
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2026-09-10 19:26:47.754429",
+ "modified": "2026-10-27 09:42:21.222505",
  "modified_by": "Administrator",
  "module": "Cpc Construction Management",
  "name": "contract-center",
  "owner": "Administrator",
  "page_name": "contract-center",
- "roles": [],
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
  "script": null,
  "standard": "Yes",
  "style": null,

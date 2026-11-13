@@ -49,6 +49,13 @@
   "column_break_revision_3",
   "irpo_available_qty_before",
   "irpo_available_qty",
+  "section_unplanned_snapshot",
+  "unplanned_qty_before",
+  "unplanned_qty_after",
+  "column_break_unplanned_1",
+  "unplanned_qty_added",
+  "snapshot_captured",
+  "total_reversed",
   "section_notes",
   "remarks"
  ],
@@ -280,7 +287,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Event Type",
-   "options": "\nMR Submit\nPO Submit\nPR Submit\nPI Submit\nCancel\nBudget Revision",
+   "options": "\nMR Submit\nPO Submit\nPR Submit\nPI Submit\nCancel\nBudget Revision\nUnplanned Qty Added - MR\nUnplanned Qty Revision - Task",
    "read_only": 1
   },
   {
@@ -350,6 +357,50 @@
    "read_only": 1
   },
   {
+   "fieldname": "section_unplanned_snapshot",
+   "fieldtype": "Section Break",
+   "label": "Unplanned Qty Snapshot"
+  },
+  {
+   "fieldname": "unplanned_qty_before",
+   "fieldtype": "Float",
+   "label": "Unplanned Qty Before",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unplanned_qty_after",
+   "fieldtype": "Float",
+   "label": "Unplanned Qty After",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_unplanned_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "How much this row raised the Task QTY (undone when the voucher is cancelled)",
+   "fieldname": "unplanned_qty_added",
+   "fieldtype": "Float",
+   "label": "Unplanned Qty Added",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "snapshot_captured",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Snapshot Captured",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_reversed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Total Reversed",
+   "read_only": 1
+  },
+  {
    "fieldname": "section_notes",
    "fieldtype": "Section Break",
    "label": "Notes"
@@ -364,7 +415,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-06 14:48:31.733453",
+ "modified": "2026-10-22 14:30:00.000000",
  "modified_by": "Administrator",
  "module": "Cpc Construction Management",
  "name": "IRPO Quantity Ledger",

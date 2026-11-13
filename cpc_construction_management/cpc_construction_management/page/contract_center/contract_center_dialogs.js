@@ -1056,6 +1056,30 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 				"Currency",
 				__("Select Currency")
 			),
+			project: this.make_link_control(
+				"[data-contract-project-field]",
+				"contract_project",
+				"Project",
+				__("Select Project")
+			),
+		};
+
+		this.contract_link_controls.project.get_query = () => {
+			const company = this.contract_link_controls.company.get_value();
+			const customer = this.contract_link_controls.customer.get_value();
+			if (!company || !customer) {
+				frappe.msgprint({
+					title: __("Missing Filters"),
+					indicator: "orange",
+					message: __("Please select Company and Customer first to see available projects.")
+				});
+				return {
+					filters: { name: ["=", ""] }
+				};
+			}
+			return {
+				filters: { company, customer }
+			};
 		};
 	}
 
@@ -1087,6 +1111,37 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		});
 		this.$root.on("click", "[data-save-contract]", () => this.save_contract());
 		this.$root.on("click", "[data-submit-contract]", () => this.submit_contract());
+		this.$root.on("change", "[data-field='use_existing_project']", (event) => {
+			const checked = $(event.currentTarget).is(":checked");
+			const $container = this.$root.find("[data-contract-project-container]");
+			if (checked) {
+				$container.removeClass("hide");
+			} else {
+				$container.addClass("hide");
+				this.contract_link_controls.project.set_value("");
+			}
+		});
+		this.$root.on(
+			"change",
+			"[data-contract-customer-field] input, [data-contract-company-field] input",
+			() => {
+				const proj = this.contract_link_controls.project.get_value();
+				const company = this.contract_link_controls.company.get_value();
+				const customer = this.contract_link_controls.customer.get_value();
+				if (proj) {
+					frappe.db.get_value("Project", proj, ["company", "customer"]).then((r) => {
+						if (r && r.message) {
+							if (
+								(company && r.message.company !== company) ||
+								(customer && r.message.customer !== customer)
+							) {
+								this.contract_link_controls.project.set_value("");
+							}
+						}
+					});
+				}
+			}
+		);
 		this.$root.on("input change", "[data-contract-currency-field] input", () =>
 			this.update_boq_currency_labels()
 		);
@@ -1102,6 +1157,24 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 			this.view.planner._open_break_irpo_dialog();
 		});
 		this.$root.on("click", "[data-save-sales-order]", () => this.save_sales_order());
+		this.$root.on("click", "[data-add-so-item]", () => this.add_so_item_row());
+		this.$root.on("click", "[data-remove-so-item]", (event) => {
+			event.preventDefault();
+			const $tbody = $(event.currentTarget).closest("tbody");
+			$(event.currentTarget).closest("tr").remove();
+			if ($tbody.find("[data-so-item]").length === 0) {
+				$tbody.html(
+					`<tr class="cc-so-empty-row"><td colspan="6" class="cc-modal-loading">${__(
+						"No items yet. Use + Add Row to add items."
+					)}</td></tr>`
+				);
+			}
+		});
+		this.$root.on(
+			"input change",
+			"[data-so-field='qty'], [data-so-field='rate']",
+			(event) => this.update_so_row_amount($(event.currentTarget).closest("tr"))
+		);
 		this.$root.on("click", "[data-so-send-approval]", () =>
 			this.apply_sales_order_workflow("Send for Approval")
 		);
@@ -1156,6 +1229,7 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		// A stale reference would make the next Save update the previous contract
 		// instead of inserting a new one.
 		this.active_contract = null;
+		$modal.find("#cc-contract-modal-title").text(__("Add Construction Contract"));
 		$modal.find("input").val("");
 		this.set_contract_editable(true);
 		$modal.find("[data-save-contract]").prop("disabled", false).removeClass("hide");
@@ -1172,6 +1246,9 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		this.clear_state_card($modal, "[data-boq-state]", __("Editable"));
 		$modal.find("[data-field='ownership']").val("Own");
 		$modal.find("[data-field='contract_nature']").val("Remeasurement / BOQ");
+		$modal.find("[data-field='use_existing_project']").prop("checked", false);
+		$modal.find("[data-contract-project-container]").addClass("hide");
+		this.contract_link_controls.project.set_value("");
 		$modal.find("[data-field='contract_date'], [data-field='start_date']").val("");
 		$modal.find("[data-field='end_date']").val("");
 		$modal.find("[data-field='advance_percent'], [data-field='retention_percent']").val("");
@@ -1208,6 +1285,14 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		set_field("contract_title", doc.contract_title);
 		set_field("ownership", doc.ownership);
 		set_field("contract_nature", doc.contract_nature);
+		const use_existing = Boolean(doc.use_existing_project);
+		$modal.find("[data-field='use_existing_project']").prop("checked", use_existing);
+		if (use_existing || doc.project) {
+			$modal.find("[data-contract-project-container]").removeClass("hide");
+		} else {
+			$modal.find("[data-contract-project-container]").addClass("hide");
+		}
+		this.contract_link_controls.project.set_value(doc.project || "");
 		set_field("contract_date", doc.contract_date);
 		set_field("start_date", doc.start_date);
 		set_field("end_date", doc.end_date);
@@ -1239,17 +1324,39 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		} else {
 			this.clear_state_card($modal, "[data-project-state]", __("Waiting for submit"));
 		}
-		this.clear_state_card(
-			$modal,
-			"[data-boq-state]",
-			__("Editable · {0} BOQ items", [(doc.boq_items || []).length])
+		const is_editable = doc.docstatus === 0;
+		$modal.find("#cc-contract-modal-title").text(
+			is_editable ? __("Edit Construction Contract") : __("Construction Contract")
 		);
+
+		if (is_editable) {
+			this.clear_state_card(
+				$modal,
+				"[data-boq-state]",
+				__("Editable · {0} BOQ items", [(doc.boq_items || []).length])
+			);
+			this.set_contract_editable(true);
+			$modal.find("[data-save-contract]").prop("disabled", false).removeClass("hide");
+			$modal.find("[data-submit-contract]").prop("disabled", false).removeClass("hide");
+			$modal.find("[data-create-sales-order]").addClass("hide");
+		} else {
+			this.clear_state_card(
+				$modal,
+				"[data-boq-state]",
+				doc.docstatus === 1
+					? __("Submitted · {0} BOQ items", [(doc.boq_items || []).length])
+					: __("Cancelled · {0} BOQ items", [(doc.boq_items || []).length])
+			);
+			this.set_contract_editable(false);
+			$modal.find("[data-save-contract], [data-submit-contract]").addClass("hide");
+			if (doc.docstatus === 1) {
+				$modal.find("[data-create-sales-order]").removeClass("hide");
+			} else {
+				$modal.find("[data-create-sales-order]").addClass("hide");
+			}
+		}
 		$modal.find(".cc-state-strip > div").addClass("cc-saved");
 
-		this.set_contract_editable(true);
-		$modal.find("[data-save-contract]").prop("disabled", false).removeClass("hide");
-		$modal.find("[data-submit-contract]").prop("disabled", false).removeClass("hide");
-		$modal.find("[data-create-sales-order]").addClass("hide");
 		this.show_contract_summary();
 		this.show("cc-contract-modal");
 	}
@@ -1280,12 +1387,24 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 	// Only the enterable Sales Order fields are editable in Draft state; the
 	// contract/project/customer/currency identity fields stay read-only.
 	set_sales_order_editable(editable) {
-		this.$root
-			.find("#cc-sales-order-modal")
+		const $modal = this.$root.find("#cc-sales-order-modal");
+		$modal
 			.find(
 				"[data-field='delivery_date'], [data-field='customer_po'], [data-field='advance_payment'], [data-field='retention']"
 			)
 			.prop("readonly", !editable);
+		$modal.find("[data-add-so-item], .cc-add-so-row-wrap").toggleClass("hide", !editable);
+		$modal.find("[data-remove-so-item]").toggleClass("hide", !editable);
+		$modal
+			.find(
+				"[data-so-item] [data-so-field='description'], [data-so-item] [data-so-field='qty'], [data-so-item] [data-so-field='rate']"
+			)
+			.prop("readonly", !editable)
+			.prop("disabled", !editable);
+		$modal.find("[data-so-item]").each((_, row) => {
+			const control = $(row).data("item_control");
+			if (control && control.$input) control.$input.prop("readonly", !editable);
+		});
 	}
 
 	// Switches the Sales Order dialog between the Details form and the Progress
@@ -1441,8 +1560,9 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		this.active_sales_order = null;
 		const $modal = this.$root.find("#cc-sales-order-modal");
 		$modal.find(".cc-state-strip > div").removeClass("cc-saved");
+		$modal.find("#cc-sales-order-modal-title").text(__("Add Sales Order / RPO"));
 		$modal.find("[data-so-contract-state]").text(__("Ready"));
-		$modal.find("[data-so-boq-state]").text(__("Loaded"));
+		$modal.find("[data-so-boq-state]").text(__("Loading…"));
 		$modal.find("input").prop("readonly", true);
 		this.set_sales_order_editable(true);
 		this.set_sales_order_save_state("draft");
@@ -1456,31 +1576,88 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		$modal.find("[data-field='currency']").val(contract.currency || "SAR");
 		$modal.find("[data-field='advance_payment'], [data-field='retention']").val("");
 		$modal.find("[data-sales-order-state]").text(__("Not Saved"));
+		$modal.find("[data-add-so-item], .cc-add-so-row-wrap").removeClass("hide");
 		$modal
 			.find("[data-sales-order-items]")
 			.html(
-				`<tr><td colspan="5" class="cc-modal-loading">${__(
-					"Loading BOQ items…"
+				`<tr><td colspan="6" class="cc-modal-loading">${__(
+					"Loading items…"
 				)}</td></tr>`
 			);
 		this.show("cc-sales-order-modal");
 		this.reset_so_tabs($modal);
 
+		let has_existing_so = false;
+		if (Array.isArray(contract.sales_orders) && contract.sales_orders.some((so) => so.docstatus !== 2)) {
+			has_existing_so = true;
+		} else {
+			try {
+				const count = await frappe.db.count("Sales Order", {
+					filters: { cpc_contract: contract.name, docstatus: ["!=", 2] },
+				});
+				has_existing_so = count > 0;
+			} catch (e) {
+				has_existing_so = false;
+			}
+		}
+
 		try {
 			const document = await frappe.db.get_doc("Construction Contract", contract.name);
-			this.render_sales_order_items(document.boq_items || [], contract.currency);
 			$modal
 				.find("[data-field='advance_payment']")
 				.val(document.advance_percent || "");
 			$modal.find("[data-field='retention']").val(document.retention_percent || "");
+
+			if (has_existing_so) {
+				// If there are already Sales Orders for this contract, start empty.
+				$modal.find("[data-so-boq-state]").text(__("Empty"));
+				$modal
+					.find("[data-sales-order-items]")
+					.html(
+						`<tr class="cc-so-empty-row"><td colspan="6" class="cc-modal-loading">${__(
+							"No items yet. Use + Add Row to add items."
+						)}</td></tr>`
+					);
+			} else {
+				// First Sales Order for this contract: automatically load BOQ items.
+				const boq_items = (document.boq_items || []).filter((row) => row.item_code);
+				if (boq_items.length) {
+					this.render_sales_order_items(boq_items, contract.currency || "SAR", true);
+					$modal
+						.find("[data-so-boq-state]")
+						.text(__("{0} Items Loaded", [boq_items.length]));
+				} else {
+					$modal.find("[data-so-boq-state]").text(__("Empty"));
+					$modal
+						.find("[data-sales-order-items]")
+						.html(
+							`<tr class="cc-so-empty-row"><td colspan="6" class="cc-modal-loading">${__(
+								"No BOQ items with item code found. Use + Add Row to add items."
+							)}</td></tr>`
+						);
+				}
+			}
 		} catch (error) {
-			$modal
-				.find("[data-sales-order-items]")
-				.html(
-					`<tr><td colspan="5" class="cc-modal-loading">${__(
-						"Could not load BOQ items."
-					)}</td></tr>`
-				);
+			$modal.find("[data-field='advance_payment'], [data-field='retention']").val("");
+			if (has_existing_so) {
+				$modal.find("[data-so-boq-state]").text(__("Empty"));
+				$modal
+					.find("[data-sales-order-items]")
+					.html(
+						`<tr class="cc-so-empty-row"><td colspan="6" class="cc-modal-loading">${__(
+							"No items yet. Use + Add Row to add items."
+						)}</td></tr>`
+					);
+			} else {
+				$modal.find("[data-so-boq-state]").text(__("Error"));
+				$modal
+					.find("[data-sales-order-items]")
+					.html(
+						`<tr><td colspan="6" class="cc-modal-loading">${__(
+							"Could not load BOQ items"
+						)}</td></tr>`
+					);
+			}
 		}
 	}
 
@@ -1496,6 +1673,9 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		// order, and the workflow engine then raises "Not a valid Workflow Action".
 		const pending_approval = so_doc.workflow_state === "Pending Approval";
 		const $modal = this.$root.find("#cc-sales-order-modal");
+		$modal.find("#cc-sales-order-modal-title").text(
+			approved ? __("Sales Order / RPO") : __("Edit Sales Order / RPO")
+		);
 		$modal.find(".cc-state-strip > div").removeClass("cc-saved");
 		$modal.find("[data-so-boq-state]").text(__("{0} Items Loaded", [so_doc.items.length]));
 		$modal.find("input").prop("readonly", true);
@@ -1509,6 +1689,9 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		$modal.find("[data-field='advance_payment']").val(so_doc.advance_payment || "");
 		$modal.find("[data-field='retention']").val(so_doc.retention || "");
 		this.render_sales_order_items(so_doc.items || [], so_doc.currency || contract.currency || "SAR");
+		// Items of an existing Sales Order are managed on the document itself,
+		// so the add/remove row controls are only for brand-new orders.
+		$modal.find("[data-add-so-item], .cc-add-so-row-wrap").addClass("hide");
 		this.set_state_card(
 			$modal,
 			"[data-so-contract-state]",
@@ -1645,18 +1828,25 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		set_summary("target_margin_percent", `${target_margin_percent.toFixed(2)}%`);
 	}
 
-	render_sales_order_items(rows, currency) {
+	render_sales_order_items(rows, currency, allow_remove = false) {
 		const html = rows
 			.map(
 				(row) => `
-			<tr data-so-item data-item-code="${this.view.escape(row.item_code)}" data-qty="${flt(
+			<tr data-so-item data-item-code="${this.view.escape(row.item_code || "")}" data-description="${this.view.escape(row.description || "")}" data-qty="${flt(
 					row.qty
 				)}" data-rate="${flt(row.rate)}">
-				<td><strong>${this.view.escape(row.item_code || row.boq_code)}</strong></td>
-				<td>${this.view.escape(row.description)}</td>
+				<td><strong>${this.view.escape(row.item_code || row.boq_code || "")}</strong></td>
+				<td>${this.view.escape(row.description || "")}</td>
 				<td class="cc-number">${format_number(row.qty)}</td>
 				<td class="cc-number">${this.view.money(row.rate, currency)}</td>
-				<td class="cc-number">${this.view.money(row.amount, currency)}</td>
+				<td class="cc-number">${this.view.money(row.amount || (flt(row.qty) * flt(row.rate)), currency)}</td>
+				<td>${
+					allow_remove
+						? `<button type="button" class="cc-row-remove" data-remove-so-item aria-label="${__(
+								"Remove row"
+						  )}">×</button>`
+						: ""
+				}</td>
 			</tr>`
 			)
 			.join("");
@@ -1664,14 +1854,93 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 			.find("[data-sales-order-items]")
 			.html(
 				html ||
-					`<tr><td colspan="5" class="cc-modal-loading">${__(
-						"No BOQ items found."
+					`<tr class="cc-so-empty-row"><td colspan="6" class="cc-modal-loading">${__(
+						"No items found."
 					)}</td></tr>`
 			);
 	}
 
+	// Appends an editable Sales Order item row. The Item cell hosts a Link
+	// control (same as the contract BOQ rows), while Description / Qty / Rate
+	// are plain inputs and Amount is derived.
+	add_so_item_row(row = {}) {
+		const $tbody = this.$root.find("[data-sales-order-items]");
+		$tbody.find(".cc-so-empty-row").remove();
+		const $row = $(`
+			<tr data-so-item data-item-code="">
+				<td><div data-so-item-field></div></td>
+				<td><input class="cc-cell-input" data-so-field="description" placeholder="${__(
+					"Description"
+				)}"></td>
+				<td><input class="cc-cell-input cc-number" data-so-field="qty" type="number" min="0"></td>
+				<td><input class="cc-cell-input cc-number" data-so-field="rate" type="number" min="0"></td>
+				<td class="cc-number"><span data-so-field="amount">—</span></td>
+				<td><button type="button" class="cc-row-remove" data-remove-so-item aria-label="${__(
+					"Remove row"
+				)}">×</button></td>
+			</tr>`);
+		$tbody.append($row);
+
+		const control = frappe.ui.form.make_control({
+			parent: $row.find("[data-so-item-field]"),
+			df: {
+				fieldname: "so_item_" + frappe.utils.get_random(8),
+				fieldtype: "Link",
+				options: "Item",
+				placeholder: __("Item"),
+				get_query: () =>
+					this.active_contract
+						? { filters: { cpc_source_contract: this.active_contract.name } }
+						: {},
+			},
+			render_input: true,
+		});
+		control.$input.on("change awesomplete-selectcomplete", () => this.on_so_item_change($row));
+		$row.data("item_control", control);
+
+		if (row.item_code) control.set_value(row.item_code);
+		if (row.description) $row.find("[data-so-field='description']").val(row.description);
+		if (row.qty !== undefined) $row.find("[data-so-field='qty']").val(row.qty);
+		if (row.rate !== undefined) $row.find("[data-so-field='rate']").val(row.rate);
+		this.update_so_row_amount($row);
+		return $row;
+	}
+
+	on_so_item_change($row) {
+		const control = $row.data("item_control");
+		const code = control ? control.get_value() : "";
+		$row.attr("data-item-code", code || "");
+		if (!code) {
+			this.update_so_row_amount($row);
+			return;
+		}
+		frappe.db
+			.get_value("Item", code, ["item_name", "standard_rate"])
+			.then((r) => {
+				const d = r && r.message ? r.message : r;
+				if (!d) return;
+				const $description = $row.find("[data-so-field='description']");
+				if (!$description.val()) $description.val(d.item_name || code);
+				const $rate = $row.find("[data-so-field='rate']");
+				if (!$rate.val() && d.standard_rate) $rate.val(d.standard_rate);
+				this.update_so_row_amount($row);
+			});
+	}
+
+	update_so_row_amount($row) {
+		const qty = flt($row.find("[data-so-field='qty']").val());
+		const rate = flt($row.find("[data-so-field='rate']").val());
+		const amount = qty * rate;
+		const currency =
+			(this.active_sales_order && this.active_sales_order.currency) ||
+			(this.active_contract && this.active_contract.currency) ||
+			"SAR";
+		$row.find("[data-so-field='amount']").text(amount ? this.view.money(amount, currency) : "—");
+	}
+
 	read_contract_form($modal) {
 		const field = (name) => $modal.find(`[data-field='${name}']`).val();
+		const use_existing = $modal.find("[data-field='use_existing_project']").is(":checked") ? 1 : 0;
 		return {
 			contract_title: field("contract_title"),
 			customer: this.contract_link_controls.customer.get_value(),
@@ -1679,6 +1948,8 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 			contract_nature: field("contract_nature"),
 			company: this.contract_link_controls.company.get_value(),
 			currency: this.contract_link_controls.currency.get_value(),
+			use_existing_project: use_existing,
+			project: use_existing ? this.contract_link_controls.project.get_value() : "",
 			contract_date: field("contract_date"),
 			start_date: field("start_date"),
 			end_date: field("end_date"),
@@ -1707,6 +1978,12 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		) {
 			frappe.msgprint(
 				__("Complete all required contract fields and BOQ descriptions and UOM.")
+			);
+			return false;
+		}
+		if (payload.use_existing_project && !payload.project) {
+			frappe.msgprint(
+				__("Please select an existing Project or uncheck 'Use Existing Project?'.")
 			);
 			return false;
 		}
@@ -1832,7 +2109,15 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		const boq_count = $modal.find("[data-boq-rows] tr").length;
 
 		this.set_state_card($modal, "[data-contract-state]", "Construction Contract", saved.name);
-		this.clear_state_card($modal, "[data-project-state]", __("Waiting for submit"));
+		if (saved.project) {
+			this.set_state_card($modal, "[data-project-state]", "Project", saved.project);
+			$modal.find("[data-project-state]").closest("div").addClass("cc-saved");
+			this.contract_link_controls.project.set_value(saved.project);
+			$modal.find("[data-contract-project-container]").removeClass("hide");
+		} else {
+			this.clear_state_card($modal, "[data-project-state]", __("Waiting for submit"));
+			$modal.find("[data-project-state]").closest("div").removeClass("cc-saved");
+		}
 		this.clear_state_card(
 			$modal,
 			"[data-boq-state]",
@@ -1841,7 +2126,7 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 
 		$modal.find("[data-contract-state]").closest("div").addClass("cc-saved");
 		$modal
-			.find("[data-project-state], [data-boq-state]")
+			.find("[data-boq-state]")
 			.closest("div")
 			.removeClass("cc-saved");
 
@@ -1870,6 +2155,8 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		this.set_state_card($modal, "[data-contract-state]", "Construction Contract", created.name);
 		if (project) {
 			this.set_state_card($modal, "[data-project-state]", "Project", project);
+			this.contract_link_controls.project.set_value(project);
+			$modal.find("[data-contract-project-container]").removeClass("hide");
 		} else {
 			this.clear_state_card($modal, "[data-project-state]", __("Not created"));
 		}
@@ -1903,9 +2190,13 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 			.find("input")
 			.not("[data-boq-field='amount'], [data-summary-field]")
 			.prop("readonly", !editable);
+		$modal.find("[data-field='use_existing_project']").prop("disabled", !editable);
 		$modal.find("[data-boq-field='amount'], [data-summary-field]").prop("readonly", true);
 		$modal.find("select").prop("disabled", !editable);
-		$modal.find("[data-add-boq-row], [data-remove-boq-row]").prop("disabled", !editable);
+		$modal
+			.find("[data-add-boq-row], [data-remove-boq-row]")
+			.prop("disabled", !editable)
+			.toggleClass("hide", !editable);
 		this.set_link_controls_read_only(!editable);
 		this.set_boq_uom_read_only(!editable);
 	}
@@ -1944,16 +2235,30 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 		const delivery_date = $modal.find("[data-field='delivery_date']").val();
 		const items = $modal
 			.find("[data-so-item]")
-			.map((_, row) => ({
-				item_code: $(row).data("item-code"),
-				qty: flt($(row).data("qty")),
-				rate: flt($(row).data("rate")),
-				delivery_date,
-			}))
+			.map((_, row) => {
+				const $row = $(row);
+				const control = $row.data("item_control");
+				if (control) {
+					return {
+						item_code: control.get_value(),
+						description: $row.find("[data-so-field='description']").val() || undefined,
+						qty: flt($row.find("[data-so-field='qty']").val()),
+						rate: flt($row.find("[data-so-field='rate']").val()),
+						delivery_date,
+					};
+				}
+				return {
+					item_code: $row.attr("data-item-code"),
+					description: $row.attr("data-description") || undefined,
+					qty: flt($row.attr("data-qty")),
+					rate: flt($row.attr("data-rate")),
+					delivery_date,
+				};
+			})
 			.get();
 		if (!delivery_date || !items.length || items.some((row) => !row.item_code)) {
 			return frappe.msgprint(
-				__("Enter a delivery date and ensure BOQ items have item codes.")
+				__("Enter a delivery date and make sure every item row has an Item selected.")
 			);
 		}
 
@@ -1998,6 +2303,11 @@ cpc_construction_management.contract_center.Dialogs = class ContractCenterDialog
 					advance_payment: doc.advance_payment,
 					retention: doc.retention,
 				});
+				// A Sales Order that was saved from this dialog keeps editable
+				// item rows in the table; persist any additions/edits on re-save.
+				if ($modal.find("[data-so-item] [data-so-field='qty']").length) {
+					merged.items = items;
+				}
 				const updated = await frappe.call({
 					method: "frappe.client.save",
 					args: { doc: merged },

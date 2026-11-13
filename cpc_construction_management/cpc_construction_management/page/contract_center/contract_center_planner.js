@@ -1,3 +1,4 @@
+
 // cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 // 	constructor(view) {
 // 		this.view = view;
@@ -6,12 +7,13 @@
 // 		this.tasks = [];
 // 		this.collapsed = new Set();
 // 		this.pending_date_changes = {};
+// 		this.status_map = {};
 // 		this.active_contract = null;
 // 		this.active_so = null;
 // 		this._init_tooltip();
 // 		this._bind_modal_events();
 // 	}
-
+ 
 // 	async open(contract_name, sales_order_name = null) {
 // 		this.active_contract = contract_name;
 // 		this.active_so = sales_order_name;
@@ -21,14 +23,14 @@
 // 		await this._populate_filter_dropdowns();
 // 		await this._load();
 // 	}
-
+ 
 // 	async preview_inline(_use_inline = true) {
 // 		// preview_inline() is kept for backwards-compat but is a no-op:
 // 		// the planner now always renders inside the page (position:absolute
 // 		// within .cpc-control-center) and never takes over the full screen.
 // 		frappe.show_alert({ message: __("Planner is now always page-embedded."), indicator: "blue" });
 // 	}
-
+ 
 // 	async _load() {
 // 		this._render_loading();
 // 		try {
@@ -41,13 +43,14 @@
 // 				},
 // 			});
 // 			this.tasks = r.message || [];
+// 			await this._load_status_map();
 // 			this._render();
 // 		} catch (err) {
 // 			this._render_error();
 // 			console.error("IRPO Planner load error", err);
 // 		}
 // 	}
-
+ 
 // 	async _populate_filter_dropdowns() {
 // 		const scope = this.active_contract || null;
 // 		try {
@@ -76,7 +79,7 @@
 // 		}
 // 		this._update_context_bar();
 // 	}
-
+ 
 // 	_fill_scoped_selects(data, preselect_project = "", preselect_so = "") {
 // 		const $project = this.$modal.find("[data-planner-filter='project']");
 // 		$project.html(
@@ -113,25 +116,25 @@
 // 				: ""
 // 		);
 // 	}
-
+ 
 // 	_update_context_bar() {
 // 		const contract = this.$modal.find("[data-planner-filter='contract']").val() || this.active_contract || "";
 // 		const project = this.$modal.find("[data-planner-filter='project']").val() || "";
 // 		const so = this.$modal.find("[data-planner-filter='sales_order']").val() || this.active_so || "";
 // 		this._set_context_bar(contract, project, so);
 // 	}
-
+ 
 // 	_set_context_bar(contract, project, so) {
 // 		this.$modal.find("[data-planner-context]").text([contract, project, so].filter(Boolean).join(" \u2022 "));
 // 	}
-
+ 
 // 	_render() {
 // 		const tasks = this._apply_sort(this.tasks);
 // 		this._update_context_bar();
 // 		this._render_wbs(tasks);
 // 		this._render_timeline(tasks);
 // 	}
-
+ 
 // 	_apply_sort(tasks) {
 // 		const sort_key = this.$modal.find("[data-planner-sort]").val();
 // 		if (!sort_key) return tasks;
@@ -145,7 +148,7 @@
 // 		sorted.sort(compare);
 // 		return sorted;
 // 	}
-
+ 
 // 	_sort_value(task, key) {
 // 		switch (key) {
 // 			case "modified":
@@ -178,16 +181,16 @@
 // 				return task[key] || "";
 // 		}
 // 	}
-
+ 
 // 	_render_loading() {
-// 		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty">${__("Loading...")}</td></tr>`);
+// 		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty">${__("Loading...")}</td></tr>`);
 // 		this.$modal.find("[data-planner-timeline-body]").html("");
 // 	}
-
+ 
 // 	_render_error() {
-// 		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty planner-error">${__("Could not load planner data.")}</td></tr>`);
+// 		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty planner-error">${__("Could not load planner data.")}</td></tr>`);
 // 	}
-
+ 
 // 	_render_wbs(tasks) {
 // 		const boq_nodes = tasks.filter((t) => t.cpc_node_type === "BOQ Node");
 // 		const irpo_map = new Map();
@@ -197,7 +200,7 @@
 // 			irpo_map.set(t.parent_task, ch);
 // 		});
 // 		if (!tasks.length) {
-// 			this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty">${__("No IRPO tasks found for this contract.")}</td></tr>`);
+// 			this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty">${__("No IRPO tasks found for this contract.")}</td></tr>`);
 // 			return;
 // 		}
 // 		let html = "";
@@ -207,7 +210,7 @@
 // 			.forEach((irpo) => { html += this._leaf_row(irpo); });
 // 		this.$modal.find("[data-planner-wbs-body]").html(html);
 // 	}
-
+ 
 // 	// Progress cell for the WBS table. Shows a bar + % from the Task's
 // 	// `progress` field; rows without progress render an em dash.
 // 	_progress_cell(pcnt) {
@@ -219,7 +222,7 @@
 // 			<span class="planner-pct-label">${label}%</span>
 // 		</span>`;
 // 	}
-
+ 
 // 	// Renders a WBS label as "<subject>" plus a muted "<name>" (task ID) when the
 // 	// subject differs from the ID; otherwise just the ID.
 // 	_label_with_id(subject, name) {
@@ -229,7 +232,7 @@
 // 		}
 // 		return `<span class="planner-name-text" title="${esc(name)}">${esc(name)}</span>`;
 // 	}
-
+ 
 // 	_group_row(node, irpo_map) {
 // 		const children = irpo_map.get(node.name) || [];
 // 		const is_collapsed = this.collapsed.has(node.name);
@@ -245,13 +248,14 @@
 // 		<button class="planner-chevron" data-toggle-node="${frappe.utils.escape_html(node.name)}">${chevron}</button>
 // 		<strong>${this._label_with_id(node.subject, node.name)}</strong>
 // 	</td>
-// 	<td>Lot</td>
+// 	<td class="planner-center">Lot</td>
 // 	<td class="planner-num">1</td>
 // 	<td class="planner-num">${format_currency(budget, "SAR")}</td>
-// 	<td class="planner-pending">${format_currency(remaining, "SAR")}</td>
-// 	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, "SAR")}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}">${consumed_of_budget}% ${__("allocated")}</span>` : ""}</div></td>
+// 	<td class="planner-pending planner-num">${format_currency(remaining, "SAR")}</td>
+// 	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, "SAR")}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}" title="${consumed_of_budget}% ${__("allocated")}">${consumed_of_budget}%</span>` : ""}</div></td>
 // 	<td class="planner-progress">${this._progress_cell(progress)}</td>
 // 	<td></td>
+// 	<td class="planner-status planner-center">${this._status_pill(this._group_status(node, children))}</td>
 // 	<td class="planner-actions"><button class="planner-menu-btn" data-menu-node="${frappe.utils.escape_html(node.name)}">...</button></td>
 // </tr>`;
 // 		if (!is_collapsed) {
@@ -259,7 +263,7 @@
 // 		}
 // 		return html;
 // 	}
-
+ 
 // 	_leaf_row(irpo) {
 // 		const pct = flt(irpo.consumed_pct || irpo.progress || 0);
 // 		const predecessors = irpo.depends_on_tasks || "";
@@ -271,19 +275,104 @@
 // 		${this._label_with_id(irpo.subject, irpo.name)}
 // 		${pred_html}
 // 	</td>
-// 	<td>${frappe.utils.escape_html(irpo.cpc_uom || "Percent")}</td>
+// 	<td class="planner-center">${frappe.utils.escape_html(irpo.cpc_uom || "Percent")}</td>
 // 	<td class="planner-num">${flt(irpo.cpc_budget_qty) || "&mdash;"}</td>
 // 	<td class="planner-num">${format_currency(flt(irpo.cpc_budget_amount), "SAR")}</td>
-// 	<td class="planner-pending">&mdash;</td>
-// 	<td class="planner-consumed">&mdash;</td>
+// 	<td class="planner-pending planner-num">&mdash;</td>
+// 	<td class="planner-consumed planner-center">&mdash;</td>
 // 	<td class="planner-progress">${this._progress_cell(pct)}</td>
-// 	<td class="planner-weekly"><button type="button" class="btn btn-xs btn-default" data-open-weekly="${frappe.utils.escape_html(irpo.name)}">${__("Open")}</button></td>
+// 	<td class="planner-weekly planner-center"><button type="button" class="btn btn-xs btn-default" data-open-weekly="${frappe.utils.escape_html(irpo.name)}">${__("Open")}</button></td>
+// 	<td class="planner-status planner-center">${this._status_pill(this._irpo_status(irpo))}</td>
 // 	<td class="planner-actions">
+// 		${this._hold_buttons(irpo)}
 // 		<button class="planner-eye-btn" data-open-task="${frappe.utils.escape_html(irpo.name)}" title="${__("View")}">&#128065;</button>
 // 	</td>
 // </tr>`;
 // 	}
-
+ 
+// 	// ---- Hold / Resume ------------------------------------------------
+// 	// Status model (mirrors the Task form's "Reporting Status" menu):
+// 	//   Completed  -> reporting closed
+// 	//   On Hold    -> last Hold/Resume event on the Task is a Hold
+// 	//   In Progress-> any progress or a working status
+// 	//   Open       -> everything else
+// 	async _load_status_map() {
+// 		const names = this.tasks.filter((t) => t.cpc_node_type === "IRPO").map((t) => t.name);
+// 		this.status_map = {};
+// 		if (!names.length) return;
+// 		try {
+// 			const r = await frappe.call({
+// 				method: "cpc_construction_management.cpc_construction_management.progress.planner_hold.get_planner_status_map",
+// 				args: { irpos: names },
+// 			});
+// 			this.status_map = r.message || {};
+// 		} catch (err) {
+// 			// Non-fatal: the planner still works, statuses fall back to progress-based.
+// 			console.warn("IRPO status map load error", err);
+// 		}
+// 	}
+ 
+// 	_irpo_status(irpo) {
+// 		const s = this.status_map[irpo.name];
+// 		if (s && s.status) return s.status;
+// 		return flt(irpo.consumed_pct || irpo.progress || 0) > 0 ? "In Progress" : "Open";
+// 	}
+ 
+// 	_group_status(node, children) {
+// 		if (!children.length) return flt(node.progress || 0) > 0 ? "In Progress" : "Open";
+// 		const sts = children.map((c) => this._irpo_status(c));
+// 		if (sts.every((x) => x === "Completed")) return "Completed";
+// 		if (sts.some((x) => x === "In Progress" || x === "Completed")) return "In Progress";
+// 		if (sts.every((x) => x === "On Hold")) return "On Hold";
+// 		return sts.some((x) => x === "On Hold") ? "In Progress" : "Open";
+// 	}
+ 
+// 	_status_pill(status) {
+// 		const cls = { "In Progress": "inprogress", "On Hold": "hold", "Completed": "done", "Open": "open" }[status] || "open";
+// 		const icon = { "In Progress": "&#10003;", "On Hold": "&#10074;&#10074;", "Completed": "&#10003;", "Open": "" }[status] || "";
+// 		return `<span class="planner-status-pill planner-status-pill--${cls}">${icon ? `<span class="planner-status-ico">${icon}</span>` : ""}${__(status)}</span>`;
+// 	}
+ 
+// 	_hold_buttons(irpo) {
+// 		const status = this._irpo_status(irpo);
+// 		const n = frappe.utils.escape_html(irpo.name);
+// 		if (status === "Completed") return "";
+// 		if (status === "On Hold") {
+// 			return `<button type="button" class="planner-hold-btn planner-hold-btn--resume" data-resume-irpo="${n}">&#9654; ${__("Resume")}</button>`;
+// 		}
+// 		return `<button type="button" class="planner-hold-btn" data-hold-irpo="${n}">&#10074;&#10074; ${__("Hold")}</button>`;
+// 	}
+ 
+// 	_open_hold_dialog(irpo_name, action) {
+// 		const is_hold = action === "hold";
+// 		const irpo = this.tasks.find((t) => t.name === irpo_name) || {};
+// 		const d = new frappe.ui.Dialog({
+// 			title: is_hold ? __("Hold IRPO") : __("Resume IRPO"),
+// 			fields: [
+// 				{ fieldtype: "HTML", options: `<p class="text-muted">${frappe.utils.escape_html(irpo.subject || irpo_name)} <small>${frappe.utils.escape_html(irpo_name)}</small></p>` },
+// 				{ fieldname: "effective_date", label: __("Effective Date"), fieldtype: "Date", reqd: 1, default: frappe.datetime.get_today() },
+// 				{ fieldname: "reason", label: __("Reason"), fieldtype: "Small Text", reqd: 1 },
+// 			],
+// 			primary_action_label: is_hold ? __("Hold") : __("Resume"),
+// 			primary_action: async (v) => {
+// 				d.get_primary_btn().prop("disabled", true);
+// 				try {
+// 					await frappe.call({
+// 						method: "cpc_construction_management.cpc_construction_management.progress.hold_controls.record_status_event",
+// 						args: { task: irpo_name, event: is_hold ? "Hold" : "Resume", effective_date: v.effective_date, reason: v.reason },
+// 						freeze: true,
+// 					});
+// 					d.hide();
+// 					frappe.show_alert({ message: is_hold ? __("IRPO put on hold") : __("IRPO resumed"), indicator: is_hold ? "orange" : "green" });
+// 					await this._load();
+// 				} catch (err) {
+// 					d.get_primary_btn().prop("disabled", false);
+// 				}
+// 			},
+// 		});
+// 		d.show();
+// 	}
+ 
 // 	_render_timeline(tasks) {
 // 		const irpos = tasks.filter((t) => t.cpc_node_type === "IRPO");
 // 		const boq_nodes = tasks.filter((t) => t.cpc_node_type === "BOQ Node");
@@ -335,7 +424,7 @@
 // 			this._render_gantt_arrows(boq_nodes, irpos);
 // 		});
 // 	}
-
+ 
 // 	// Sets each .planner-bar-div width so it spans its full date range.
 // 	// Called once after layout; the data-bar-cols attribute stores the count.
 // 	_size_bar_divs() {
@@ -347,7 +436,7 @@
 // 			$td.find(".planner-bar-div").css("width", (cell_w * cols - 6) + "px");
 // 		});
 // 	}
-
+ 
 // 	// ── Gantt arrows ─────────────────────────────────────────────────────────
 // 	// Draws two sets of SVG connectors on a single overlay positioned over the
 // 	// timeline scroll area:
@@ -367,7 +456,7 @@
 // 		if (!$table.length) return;
 // 		const $scroll = $table.closest(".planner-timeline-scroll");
 // 		$scroll.find(".planner-deps-svg").remove();
-
+ 
 // 		const table_el = $table[0];
 // 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 // 		svg.setAttribute("class", "planner-deps-svg");
@@ -377,7 +466,7 @@
 // 		svg.style.height = table_el.scrollHeight + "px";
 // 		svg.style.overflow = "visible";
 // 		$scroll.append(svg);
-
+ 
 // 		const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
 // 		const make_marker = (id, fill) => {
 // 			const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -397,7 +486,7 @@
 // 		defs.appendChild(make_marker("planner-arrowhead", "#64748b"));
 // 		defs.appendChild(make_marker("planner-arrowhead-fan", "#94a3b8"));
 // 		svg.appendChild(defs);
-
+ 
 // 		const make_path = (d, stroke, width, marker_id) => {
 // 			const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
 // 			p.setAttribute("d", d);
@@ -409,30 +498,30 @@
 // 			if (marker_id) p.setAttribute("marker-end", `url(#${marker_id})`);
 // 			return p;
 // 		};
-
+ 
 // 		requestAnimationFrame(() => {
 // 			const svg_rect = svg.getBoundingClientRect();
-
+ 
 // 			// ── 1. Parent → children arrows ──────────────────────────
 // 			// Start at the parent bar's left edge, go left into a gutter,
 // 			// run down, then turn right into each child's left edge.
 // 			const GUTTER = 10;
 // 			const CORNER = 5;
-
+ 
 // 			for (const node of boq_nodes) {
 // 				if (this.collapsed.has(node.name)) continue;
-
+ 
 // 				const $group_row = $body.find(`[data-boq-tl="${node.name}"]`);
 // 				if (!$group_row.length) continue;
 // 				const $group_bar = $group_row.find(".planner-bar-div");
 // 				if (!$group_bar.length) continue;
-
+ 
 // 				const gb = $group_bar[0].getBoundingClientRect();
 // 				if (!gb.width) continue;
-
+ 
 // 				const px = gb.left - svg_rect.left;
 // 				const py = gb.top + gb.height / 2 - svg_rect.top;
-
+ 
 // 				const child_pts = [];
 // 				for (const child of irpos.filter((t) => t.parent_task === node.name)) {
 // 					const $cbar = $body.find(`[data-irpo-tl="${child.name}"]`).find(".planner-bar-div");
@@ -445,9 +534,9 @@
 // 					});
 // 				}
 // 				if (!child_pts.length) continue;
-
+ 
 // 				const tx = Math.min(px, ...child_pts.map((p) => p.x)) - GUTTER;
-
+ 
 // 				for (const { x: bx, y: by } of child_pts) {
 // 					const r = Math.max(0, Math.min(CORNER, (bx - tx) / 2, (by - py) / 2));
 // 					const d = [
@@ -461,7 +550,7 @@
 // 					svg.appendChild(make_path(d, "#94a3b8", "1.5", "planner-arrowhead-fan"));
 // 				}
 // 			}
-
+ 
 // 			// ── 2. Sibling dependency arrows (only for real "depends on") ──
 // 			const groups = new Map();
 // 			irpos.forEach((t) => {
@@ -469,7 +558,7 @@
 // 				if (!groups.has(t.parent_task)) groups.set(t.parent_task, []);
 // 				groups.get(t.parent_task).push(t);
 // 			});
-
+ 
 // 			const deps_map = new Map();
 // 			for (const group of groups.values()) {
 // 				const by_name = new Set(group.map((t) => t.name));
@@ -482,24 +571,24 @@
 // 					if (pred) deps_map.set(t.name, pred);
 // 				});
 // 			}
-
+ 
 // 			const R = 6;
 // 			for (const [child_name, parent_name] of deps_map) {
 // 				const $pbar = $body.find(`[data-irpo-tl="${parent_name}"]`).find(".planner-bar-div");
 // 				const $cbar = $body.find(`[data-irpo-tl="${child_name}"]`).find(".planner-bar-div");
 // 				if (!$pbar.length || !$cbar.length) continue;
-
+ 
 // 				const pb = $pbar[0].getBoundingClientRect();
 // 				const cb = $cbar[0].getBoundingClientRect();
-
+ 
 // 				const x1 = pb.right - svg_rect.left;
 // 				const y1 = pb.top + pb.height / 2 - svg_rect.top;
 // 				const x2 = cb.left - svg_rect.left;
 // 				const y2 = cb.top + cb.height / 2 - svg_rect.top;
-
+ 
 // 				const mid_x = Math.max(x1 + 14, x2 - 14);
 // 				const ry = y2 > y1 ? R : -R;
-
+ 
 // 				const d = [
 // 					`M ${x1} ${y1}`,
 // 					`H ${mid_x - R}`,
@@ -512,16 +601,20 @@
 // 			}
 // 		});
 // 	}
-
-
+ 
+ 
 // 	_gantt_row(irpo, days) {
 // 		const start_obj = irpo.exp_start_date ? frappe.datetime.str_to_obj(irpo.exp_start_date) : null;
 // 		const end_obj = irpo.exp_end_date ? frappe.datetime.str_to_obj(irpo.exp_end_date) : null;
 // 		const label = frappe.utils.escape_html(irpo.subject || irpo.name);
 // 		const pct = flt(irpo.consumed_pct || irpo.progress || 0);
-// 		const bar_style = irpo.color
+// 		const is_held = this._irpo_status(irpo) === "On Hold";
+// 		// A held bar ignores the task colour so the state is unmistakable.
+// 		const bar_style = irpo.color && !is_held
 // 			? ` style="background:${frappe.utils.escape_html(irpo.color)};box-shadow:0 1px 3px ${frappe.utils.escape_html(irpo.color)}80"`
 // 			: "";
+// 		const bar_cls = is_held ? "planner-bar-div planner-bar-div--hold" : "planner-bar-div";
+// 		const bar_label = is_held ? `&#10074;&#10074; ${label} (${__("On Hold")})` : label;
 // 		let bar_start_idx = -1;
 // 		let bar_span = 0;
 // 		days.forEach((day, i) => {
@@ -545,19 +638,19 @@
 // 					// We store the span count as a data attribute so post-render JS can
 // 					// compute the exact pixel width after layout.
 // 					return `<td class="${base_cls} planner-gantt-start" data-bar-start data-bar-cols="${bar_span}">` +
-// 						`<div class="planner-bar-div"${bar_style}` +
+// 						`<div class="${bar_cls}"${bar_style}` +
 // 						` data-tt-title="${label}"` +
 // 						` data-tt-start="${frappe.utils.escape_html(tt_start)}"` +
 // 						` data-tt-end="${frappe.utils.escape_html(tt_end)}"` +
 // 						` data-tt-pct="${tt_pct}"` +
-// 						`><span class="planner-bar-label">${label}</span></div></td>`;
+// 						`><span class="planner-bar-label">${bar_label}</span></div></td>`;
 // 				}
 // 				return `<td class="${base_cls}"></td>`;
 // 			})
 // 			.join("");
 // 		return `<tr class="planner-tl-leaf-row" data-irpo-tl="${frappe.utils.escape_html(irpo.name)}">${cells}</tr>`;
 // 	}
-
+ 
 // 	// Renders a BOQ Node group row as a date-spanning bar in the timeline.
 // 	// Uses node.color when set; falls back to the default grey CSS rule.
 // 	// Start and end are derived from the earliest/latest dates among children.
@@ -567,7 +660,7 @@
 // 		const bar_style = node.color
 // 			? ` style="background:${frappe.utils.escape_html(node.color)};box-shadow:0 1px 3px ${frappe.utils.escape_html(node.color)}80"`
 // 			: "";
-
+ 
 // 		// Compute bar span from children's date range.
 // 		const child_starts = children.map((c) => c.exp_start_date).filter(Boolean);
 // 		const child_ends   = children.map((c) => c.exp_end_date).filter(Boolean);
@@ -579,7 +672,7 @@
 // 			: null;
 // 		const start_obj = bar_start_date ? frappe.datetime.str_to_obj(bar_start_date) : null;
 // 		const end_obj   = bar_end_date   ? frappe.datetime.str_to_obj(bar_end_date)   : null;
-
+ 
 // 		let bar_start_idx = -1;
 // 		let bar_span = 0;
 // 		days.forEach((day, i) => {
@@ -589,12 +682,12 @@
 // 				bar_span++;
 // 			}
 // 		});
-
+ 
 // 		// Average progress across children.
 // 		const avg_pct = children.length
 // 			? Math.round(children.reduce((s, c) => s + flt(c.consumed_pct || c.progress || 0), 0) / children.length)
 // 			: 0;
-
+ 
 // 		const cells = days
 // 			.map((day, i) => {
 // 				const is_bar_start = i === bar_start_idx;
@@ -615,18 +708,18 @@
 // 		// The <tr> carries data-boq-tl so the arrow renderer can find this row's bar.
 // 		return `<tr class="planner-tl-group-row" data-boq-tl="${frappe.utils.escape_html(node.name)}">${cells}</tr>`;
 // 	}
-
-
+ 
+ 
 // 	expand_all() {
 // 		this.collapsed.clear();
 // 		this._render();
 // 	}
-
+ 
 // 	collapse_all() {
 // 		this.tasks.filter((t) => t.cpc_node_type === "BOQ Node").forEach((t) => this.collapsed.add(t.name));
 // 		this._render();
 // 	}
-
+ 
 // 	_toggle_node(name) {
 // 		if (this.collapsed.has(name)) {
 // 			this.collapsed.delete(name);
@@ -635,7 +728,7 @@
 // 		}
 // 		this._render();
 // 	}
-
+ 
 // 	async save_plan() {
 // 		const payload = Object.entries(this.pending_date_changes).map(([name, dates]) => ({ name, ...dates }));
 // 		if (!payload.length) {
@@ -657,16 +750,16 @@
 // 			$btn.prop("disabled", false).text(__("Save Plan"));
 // 		}
 // 	}
-
+ 
 // 	_show_modal() {
 // 		this.$modal.removeClass("hide").attr("aria-hidden", "false");
 // 	}
-
+ 
 // 	close() {
 // 		this.close_weekly_progress();
 // 		this.$modal.addClass("hide").attr("aria-hidden", "true");
 // 	}
-
+ 
 // 	open_weekly_progress(irpo_name) {
 // 		const irpo = this.tasks.find((task) => task.name === irpo_name);
 // 		if (!irpo) return;
@@ -682,14 +775,14 @@
 // 			}
 // 		);
 // 	}
-
+ 
 // 	close_weekly_progress() {
 // 		this.$root.find("[data-weekly-overlay]").addClass("hide").attr("aria-hidden", "true");
 // 		this.$modal.attr("aria-hidden", "false");
 // 		this.$root.find("[data-weekly-content]").empty();
 // 		this.weekly_progress = null;
 // 	}
-
+ 
 // 	// Creates the shared floating tooltip element for Gantt bar hovers.
 // 	_init_tooltip() {
 // 		this.$tooltip = $(`
@@ -709,7 +802,7 @@
 // 			</div>
 // 		`).appendTo(document.body);
 // 	}
-
+ 
 // 	// Positions the tooltip near the cursor, clamped inside the viewport.
 // 	_position_tooltip(e) {
 // 		const tt = this.$tooltip[0];
@@ -723,7 +816,7 @@
 // 		if (y - tt.offsetHeight < 8) y = e.clientY + 20;
 // 		this.$tooltip.css({ left: x, top: y });
 // 	}
-
+ 
 // 	_bind_modal_events() {
 // 		const $m = this.$modal;
 // 		$m.on("click", "[data-planner-close]", () => this.close());
@@ -781,6 +874,8 @@
 // 		$m.on("click", "[data-open-task]", (e) => {
 // 			this.view.irpo_viewer.open($(e.currentTarget).data("open-task"));
 // 		});
+// 		$m.on("click", "[data-hold-irpo]", (e) => this._open_hold_dialog($(e.currentTarget).data("hold-irpo"), "hold"));
+// 		$m.on("click", "[data-resume-irpo]", (e) => this._open_hold_dialog($(e.currentTarget).data("resume-irpo"), "resume"));
 // 		$m.on("click", "[data-open-weekly]", (e) => {
 // 			this.open_weekly_progress($(e.currentTarget).data("open-weekly"));
 // 		});
@@ -842,9 +937,9 @@
 // 			this.view.dialogs.open_contract();
 // 		});
 // 	}
-
+ 
 // 	// ---- Break IRPO dialog ----
-
+ 
 // 	_open_break_irpo_dialog(preselect_name = null) {
 // 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 // 		const boq_nodes = this.tasks.filter((t) => t.cpc_node_type === "BOQ Node");
@@ -873,7 +968,7 @@
 // 		this._add_break_irpo_row();
 // 		$dlg.removeClass("hide").attr("aria-hidden", "false");
 // 	}
-
+ 
 // 	// Fetch existing Leaf IRPO tasks for the currently selected BOQ node
 // 	// and repopulate the dialog table so the user can edit them in-place.
 // 	async _fetch_previous_irpos() {
@@ -909,7 +1004,7 @@
 // 			$btn.prop("disabled", false);
 // 		}
 // 	}
-
+ 
 // 	// Switch between create mode ("Save IRPO Tasks") and update mode ("Update IRPO Tasks").
 // 	// Update mode also lifts the remaining-budget validation block.
 // 	_set_break_irpo_mode(mode) {
@@ -918,12 +1013,12 @@
 // 		const label = mode === "update" ? __("Update IRPO Tasks") : __("Save IRPO Tasks");
 // 		$dlg.find("[data-break-save]").text(label).prop("disabled", false);
 // 	}
-
+ 
 // 	_close_break_irpo_dialog() {
 // 		this.$root.find("#cc-break-irpo-modal").addClass("hide").attr("aria-hidden", "true");
 // 		this._break_irpo_mode = "create";
 // 	}
-
+ 
 // 	_on_boq_select_change() {
 // 		// Sync header color picker to the selected BOQ node's stored color
 // 		const $dlg = this.$root.find("#cc-break-irpo-modal");
@@ -934,7 +1029,7 @@
 // 		this._set_break_irpo_mode("create");
 // 		this._update_break_budget_summary();
 // 	}
-
+ 
 // 	_add_break_irpo_row(prefill = null) {
 // 		const today = frappe.datetime.get_today();
 // 		// Default color from the header color picker; prefilled rows use their stored color
@@ -942,7 +1037,7 @@
 // 		const color = prefill ? (prefill.color || header_color) : header_color;
 // 		const task_name = prefill ? (prefill.name || "") : "";
 // 		const $row = $(`
-// 			<tr${task_name ? ` data-task-name="${frappe.utils.escape_html(task_name)}"` : ""}>
+// 			<tr${task_name ? ` data-task-name="${frappe.utils.escape_html(task_name)}" data-orig-amount="${flt(prefill.cpc_budget_amount)}"` : ""}>
 // 				<td><input class="cc-cell-input" data-irpo-field="subject" placeholder="${__("Subject")}" value="${frappe.utils.escape_html((prefill && prefill.subject) || "")}" /></td>
 // 				<td data-irpo-field="uom" class="cc-break-uom-cell"></td>
 // 				<td><input class="cc-cell-input" type="date" data-irpo-field="exp_start_date" value="${(prefill && prefill.exp_start_date) || today}" /></td>
@@ -984,7 +1079,7 @@
 // 		this.$root.find("[data-break-irpo-rows]").append($row);
 // 		this._update_break_budget_summary();
 // 	}
-
+ 
 // 	async _save_break_irpo() {
 // 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 // 		const boq_node_name = $dlg.find("[data-break-boq-select]").val();
@@ -1032,14 +1127,23 @@
 // 			$btn.prop("disabled", false).text(label);
 // 		}
 // 	}
-
+ 
 // 	_update_break_budget_summary() {
 // 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 // 		const $opt = $dlg.find("[data-break-boq-select] option:selected");
 // 		const boq_budget = flt($opt.data("budget"));
 // 		const allocated = flt($opt.data("allocated"));
+// 		// Delta-based net change (same logic as the Sales Order > Break IRPO dialog):
+// 		//   existing unchanged row -> 0, existing edited row -> new - original,
+// 		//   new row -> full amount. "Already Allocated" already contains the
+// 		//   existing rows, so they must never be added again.
 // 		let new_total = 0;
-// 		$dlg.find("[data-irpo-field='budget_amount']").each((_, el) => { new_total += flt($(el).val()); });
+// 		$dlg.find("[data-break-irpo-rows] tr").each((_, tr) => {
+// 			const $tr = $(tr);
+// 			const amount = flt($tr.find("[data-irpo-field='budget_amount']").val());
+// 			const orig = $tr.attr("data-orig-amount");
+// 			new_total += orig === undefined ? amount : amount - flt(orig);
+// 		});
 // 		const remaining = boq_budget - allocated - new_total;
 // 		const overrun = remaining < 0 ? -remaining : 0;
 // 		const remaining_str =
@@ -1054,12 +1158,10 @@
 // 			remaining_str +
 // 			(overrun_str ? ` ${overrun_str}` : "")
 // 		);
-// 		// In update mode the remaining-budget block is lifted so edits always save
-// 		if (this._break_irpo_mode !== "update") {
-// 			$dlg.find("[data-break-save]").prop("disabled", remaining < 0);
-// 		}
+// 		// Block only when this dialog pushes the BOQ over budget (decreases always save)
+// 		$dlg.find("[data-break-save]").prop("disabled", remaining < 0 && new_total > 0);
 // 	}
-
+ 
 // 	// Collect the current dialog rows into plain data objects.
 // 	_collect_break_rows() {
 // 		const rows = [];
@@ -1081,7 +1183,7 @@
 // 		});
 // 		return rows;
 // 	}
-
+ 
 // 	// Build an .xlsx from the dialog rows and trigger a client-side download.
 // 	async _download_break_irpo_rows() {
 // 		const $btn = this.$root.find("[data-break-download]");
@@ -1113,11 +1215,11 @@
 // 			$btn.prop("disabled", false);
 // 		}
 // 	}
-
+ 
 // 	// Upload an .xlsx/.xls and append its rows to the dialog table.
 // 	_upload_break_irpo_rows() {
 // 		const $dlg = this.$root.find("#cc-break-irpo-modal");
-
+ 
 // 		// Keep the Frappe FileUploader dialog on top of our custom modal no
 // 		// matter the stacking/z-index of the environment: drop our overlay
 // 		// below bootstrap's modal (1040) while the picker is open and restore
@@ -1133,7 +1235,7 @@
 // 				$(".modal-backdrop").css("z-index", 1350);
 // 			}
 // 		});
-
+ 
 // 		new frappe.ui.FileUploader({
 // 			folder: "Home",
 // 			is_private: 1,
@@ -1176,8 +1278,8 @@
 // 			},
 // 		});
 // 	}
-
-
+ 
+ 
 // 	_date_range(start, end) {
 // 		const days = [];
 // 		const cur = new Date(start);
@@ -1187,7 +1289,7 @@
 // 		}
 // 		return days;
 // 	}
-
+ 
 // 	_same_day(a, b) {
 // 		return (
 // 			a.getFullYear() === b.getFullYear() &&
@@ -1206,12 +1308,6 @@
 
 
 
-
-
-
-
-
-
 cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 	constructor(view) {
 		this.view = view;
@@ -1220,12 +1316,13 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		this.tasks = [];
 		this.collapsed = new Set();
 		this.pending_date_changes = {};
+		this.status_map = {};
 		this.active_contract = null;
 		this.active_so = null;
 		this._init_tooltip();
 		this._bind_modal_events();
 	}
-
+ 
 	async open(contract_name, sales_order_name = null) {
 		this.active_contract = contract_name;
 		this.active_so = sales_order_name;
@@ -1235,14 +1332,14 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		await this._populate_filter_dropdowns();
 		await this._load();
 	}
-
+ 
 	async preview_inline(_use_inline = true) {
 		// preview_inline() is kept for backwards-compat but is a no-op:
 		// the planner now always renders inside the page (position:absolute
 		// within .cpc-control-center) and never takes over the full screen.
 		frappe.show_alert({ message: __("Planner is now always page-embedded."), indicator: "blue" });
 	}
-
+ 
 	async _load() {
 		this._render_loading();
 		try {
@@ -1255,13 +1352,14 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				},
 			});
 			this.tasks = r.message || [];
+			await this._load_status_map();
 			this._render();
 		} catch (err) {
 			this._render_error();
 			console.error("IRPO Planner load error", err);
 		}
 	}
-
+ 
 	async _populate_filter_dropdowns() {
 		const scope = this.active_contract || null;
 		try {
@@ -1290,7 +1388,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		}
 		this._update_context_bar();
 	}
-
+ 
 	_fill_scoped_selects(data, preselect_project = "", preselect_so = "") {
 		const $project = this.$modal.find("[data-planner-filter='project']");
 		$project.html(
@@ -1327,25 +1425,25 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				: ""
 		);
 	}
-
+ 
 	_update_context_bar() {
 		const contract = this.$modal.find("[data-planner-filter='contract']").val() || this.active_contract || "";
 		const project = this.$modal.find("[data-planner-filter='project']").val() || "";
 		const so = this.$modal.find("[data-planner-filter='sales_order']").val() || this.active_so || "";
 		this._set_context_bar(contract, project, so);
 	}
-
+ 
 	_set_context_bar(contract, project, so) {
 		this.$modal.find("[data-planner-context]").text([contract, project, so].filter(Boolean).join(" \u2022 "));
 	}
-
+ 
 	_render() {
 		const tasks = this._apply_sort(this.tasks);
 		this._update_context_bar();
 		this._render_wbs(tasks);
 		this._render_timeline(tasks);
 	}
-
+ 
 	_apply_sort(tasks) {
 		const sort_key = this.$modal.find("[data-planner-sort]").val();
 		if (!sort_key) return tasks;
@@ -1359,7 +1457,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		sorted.sort(compare);
 		return sorted;
 	}
-
+ 
 	_sort_value(task, key) {
 		switch (key) {
 			case "modified":
@@ -1392,16 +1490,16 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				return task[key] || "";
 		}
 	}
-
+ 
 	_render_loading() {
-		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty">${__("Loading...")}</td></tr>`);
+		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty">${__("Loading...")}</td></tr>`);
 		this.$modal.find("[data-planner-timeline-body]").html("");
 	}
-
+ 
 	_render_error() {
-		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty planner-error">${__("Could not load planner data.")}</td></tr>`);
+		this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty planner-error">${__("Could not load planner data.")}</td></tr>`);
 	}
-
+ 
 	_render_wbs(tasks) {
 		const boq_nodes = tasks.filter((t) => t.cpc_node_type === "BOQ Node");
 		const irpo_map = new Map();
@@ -1411,7 +1509,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			irpo_map.set(t.parent_task, ch);
 		});
 		if (!tasks.length) {
-			this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="9" class="planner-empty">${__("No IRPO tasks found for this contract.")}</td></tr>`);
+			this.$modal.find("[data-planner-wbs-body]").html(`<tr><td colspan="10" class="planner-empty">${__("No IRPO tasks found for this contract.")}</td></tr>`);
 			return;
 		}
 		let html = "";
@@ -1421,7 +1519,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			.forEach((irpo) => { html += this._leaf_row(irpo); });
 		this.$modal.find("[data-planner-wbs-body]").html(html);
 	}
-
+ 
 	// Progress cell for the WBS table. Shows a bar + % from the Task's
 	// `progress` field; rows without progress render an em dash.
 	_progress_cell(pcnt) {
@@ -1433,7 +1531,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			<span class="planner-pct-label">${label}%</span>
 		</span>`;
 	}
-
+ 
 	// Renders a WBS label as "<subject>" plus a muted "<name>" (task ID) when the
 	// subject differs from the ID; otherwise just the ID.
 	_label_with_id(subject, name) {
@@ -1443,7 +1541,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		}
 		return `<span class="planner-name-text" title="${esc(name)}">${esc(name)}</span>`;
 	}
-
+ 
 	_group_row(node, irpo_map) {
 		const children = irpo_map.get(node.name) || [];
 		const is_collapsed = this.collapsed.has(node.name);
@@ -1459,13 +1557,14 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		<button class="planner-chevron" data-toggle-node="${frappe.utils.escape_html(node.name)}">${chevron}</button>
 		<strong>${this._label_with_id(node.subject, node.name)}</strong>
 	</td>
-	<td>Lot</td>
+	<td class="planner-center">Lot</td>
 	<td class="planner-num">1</td>
 	<td class="planner-num">${format_currency(budget, "SAR")}</td>
-	<td class="planner-pending">${format_currency(remaining, "SAR")}</td>
-	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, "SAR")}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}">${consumed_of_budget}% ${__("allocated")}</span>` : ""}</div></td>
+	<td class="planner-pending planner-num">${format_currency(remaining, "SAR")}</td>
+	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, "SAR")}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}" title="${consumed_of_budget}% ${__("allocated")}">${consumed_of_budget}%</span>` : ""}</div></td>
 	<td class="planner-progress">${this._progress_cell(progress)}</td>
 	<td></td>
+	<td class="planner-status planner-center">${this._status_pill(this._group_status(node, children))}</td>
 	<td class="planner-actions"><button class="planner-menu-btn" data-menu-node="${frappe.utils.escape_html(node.name)}">...</button></td>
 </tr>`;
 		if (!is_collapsed) {
@@ -1473,7 +1572,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		}
 		return html;
 	}
-
+ 
 	_leaf_row(irpo) {
 		const pct = flt(irpo.consumed_pct || irpo.progress || 0);
 		const predecessors = irpo.depends_on_tasks || "";
@@ -1485,19 +1584,106 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		${this._label_with_id(irpo.subject, irpo.name)}
 		${pred_html}
 	</td>
-	<td>${frappe.utils.escape_html(irpo.cpc_uom || "Percent")}</td>
+	<td class="planner-center">${frappe.utils.escape_html(irpo.cpc_uom || "Percent")}</td>
 	<td class="planner-num">${flt(irpo.cpc_budget_qty) || "&mdash;"}</td>
 	<td class="planner-num">${format_currency(flt(irpo.cpc_budget_amount), "SAR")}</td>
-	<td class="planner-pending">&mdash;</td>
-	<td class="planner-consumed">&mdash;</td>
+	<td class="planner-pending planner-num">&mdash;</td>
+	<td class="planner-consumed planner-center">&mdash;</td>
 	<td class="planner-progress">${this._progress_cell(pct)}</td>
-	<td class="planner-weekly"><button type="button" class="btn btn-xs btn-default" data-open-weekly="${frappe.utils.escape_html(irpo.name)}">${__("Open")}</button></td>
+	<td class="planner-weekly planner-center"><button type="button" class="btn btn-xs btn-default" data-open-weekly="${frappe.utils.escape_html(irpo.name)}">${__("Open")}</button></td>
+	<td class="planner-status planner-center">${this._status_pill(this._irpo_status(irpo))}</td>
 	<td class="planner-actions">
+		${this._hold_buttons(irpo)}
 		<button class="planner-eye-btn" data-open-task="${frappe.utils.escape_html(irpo.name)}" title="${__("View")}">&#128065;</button>
 	</td>
 </tr>`;
 	}
-
+ 
+	// ---- Hold / Resume ------------------------------------------------
+	// Status model (mirrors the Task form's "Reporting Status" menu):
+	//   Completed  -> reporting closed
+	//   On Hold    -> last Hold/Resume event on the Task is a Hold
+	//   In Progress-> any progress or a working status
+	//   Open       -> everything else
+	async _load_status_map() {
+		const names = this.tasks.filter((t) => t.cpc_node_type === "IRPO").map((t) => t.name);
+		this.status_map = {};
+		if (!names.length) return;
+		try {
+			const r = await frappe.call({
+				method: "cpc_construction_management.cpc_construction_management.progress.planner_hold.get_planner_status_map",
+				args: { irpos: names },
+			});
+			this.status_map = r.message || {};
+		} catch (err) {
+			// Non-fatal: the planner still works, statuses fall back to progress-based.
+			console.warn("IRPO status map load error", err);
+		}
+	}
+ 
+	_irpo_status(irpo) {
+		const s = this.status_map[irpo.name];
+		if (s && s.status) return s.status;
+		return flt(irpo.consumed_pct || irpo.progress || 0) > 0 ? "In Progress" : "Open";
+	}
+ 
+	_group_status(node, children) {
+		if (!children.length) return flt(node.progress || 0) > 0 ? "In Progress" : "Open";
+		const sts = children.map((c) => this._irpo_status(c));
+		if (sts.every((x) => x === "Completed")) return "Completed";
+		if (sts.some((x) => x === "In Progress" || x === "Completed")) return "In Progress";
+		if (sts.every((x) => x === "On Hold")) return "On Hold";
+		return sts.some((x) => x === "On Hold") ? "In Progress" : "Open";
+	}
+ 
+	_status_pill(status) {
+		// Only exceptional states are shown; In Progress / Open stay blank.
+		if (status !== "On Hold" && status !== "Completed") return "";
+		const cls = { "In Progress": "inprogress", "On Hold": "hold", "Completed": "done", "Open": "open" }[status] || "open";
+		const icon = { "In Progress": "&#10003;", "On Hold": "&#10074;&#10074;", "Completed": "&#10003;", "Open": "" }[status] || "";
+		return `<span class="planner-status-pill planner-status-pill--${cls}">${icon ? `<span class="planner-status-ico">${icon}</span>` : ""}${__(status)}</span>`;
+	}
+ 
+	_hold_buttons(irpo) {
+		const status = this._irpo_status(irpo);
+		const n = frappe.utils.escape_html(irpo.name);
+		if (status === "Completed") return "";
+		if (status === "On Hold") {
+			return `<button type="button" class="planner-hold-btn planner-hold-btn--resume" data-resume-irpo="${n}">&#9654; ${__("Resume")}</button>`;
+		}
+		return `<button type="button" class="planner-hold-btn" data-hold-irpo="${n}">&#10074;&#10074; ${__("Hold")}</button>`;
+	}
+ 
+	_open_hold_dialog(irpo_name, action) {
+		const is_hold = action === "hold";
+		const irpo = this.tasks.find((t) => t.name === irpo_name) || {};
+		const d = new frappe.ui.Dialog({
+			title: is_hold ? __("Hold IRPO") : __("Resume IRPO"),
+			fields: [
+				{ fieldtype: "HTML", options: `<p class="text-muted">${frappe.utils.escape_html(irpo.subject || irpo_name)} <small>${frappe.utils.escape_html(irpo_name)}</small></p>` },
+				{ fieldname: "effective_date", label: __("Effective Date"), fieldtype: "Date", reqd: 1, default: frappe.datetime.get_today() },
+				{ fieldname: "reason", label: __("Reason"), fieldtype: "Small Text", reqd: 1 },
+			],
+			primary_action_label: is_hold ? __("Hold") : __("Resume"),
+			primary_action: async (v) => {
+				d.get_primary_btn().prop("disabled", true);
+				try {
+					await frappe.call({
+						method: "cpc_construction_management.cpc_construction_management.progress.hold_controls.record_status_event",
+						args: { task: irpo_name, event: is_hold ? "Hold" : "Resume", effective_date: v.effective_date, reason: v.reason },
+						freeze: true,
+					});
+					d.hide();
+					frappe.show_alert({ message: is_hold ? __("IRPO put on hold") : __("IRPO resumed"), indicator: is_hold ? "orange" : "green" });
+					await this._load();
+				} catch (err) {
+					d.get_primary_btn().prop("disabled", false);
+				}
+			},
+		});
+		d.show();
+	}
+ 
 	_render_timeline(tasks) {
 		const irpos = tasks.filter((t) => t.cpc_node_type === "IRPO");
 		const boq_nodes = tasks.filter((t) => t.cpc_node_type === "BOQ Node");
@@ -1549,7 +1735,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			this._render_gantt_arrows(boq_nodes, irpos);
 		});
 	}
-
+ 
 	// Sets each .planner-bar-div width so it spans its full date range.
 	// Called once after layout; the data-bar-cols attribute stores the count.
 	_size_bar_divs() {
@@ -1561,7 +1747,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			$td.find(".planner-bar-div").css("width", (cell_w * cols - 6) + "px");
 		});
 	}
-
+ 
 	// ── Gantt arrows ─────────────────────────────────────────────────────────
 	// Draws two sets of SVG connectors on a single overlay positioned over the
 	// timeline scroll area:
@@ -1581,7 +1767,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		if (!$table.length) return;
 		const $scroll = $table.closest(".planner-timeline-scroll");
 		$scroll.find(".planner-deps-svg").remove();
-
+ 
 		const table_el = $table[0];
 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 		svg.setAttribute("class", "planner-deps-svg");
@@ -1591,7 +1777,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		svg.style.height = table_el.scrollHeight + "px";
 		svg.style.overflow = "visible";
 		$scroll.append(svg);
-
+ 
 		const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
 		const make_marker = (id, fill) => {
 			const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -1611,7 +1797,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		defs.appendChild(make_marker("planner-arrowhead", "#64748b"));
 		defs.appendChild(make_marker("planner-arrowhead-fan", "#94a3b8"));
 		svg.appendChild(defs);
-
+ 
 		const make_path = (d, stroke, width, marker_id) => {
 			const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
 			p.setAttribute("d", d);
@@ -1623,30 +1809,30 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			if (marker_id) p.setAttribute("marker-end", `url(#${marker_id})`);
 			return p;
 		};
-
+ 
 		requestAnimationFrame(() => {
 			const svg_rect = svg.getBoundingClientRect();
-
+ 
 			// ── 1. Parent → children arrows ──────────────────────────
 			// Start at the parent bar's left edge, go left into a gutter,
 			// run down, then turn right into each child's left edge.
 			const GUTTER = 10;
 			const CORNER = 5;
-
+ 
 			for (const node of boq_nodes) {
 				if (this.collapsed.has(node.name)) continue;
-
+ 
 				const $group_row = $body.find(`[data-boq-tl="${node.name}"]`);
 				if (!$group_row.length) continue;
 				const $group_bar = $group_row.find(".planner-bar-div");
 				if (!$group_bar.length) continue;
-
+ 
 				const gb = $group_bar[0].getBoundingClientRect();
 				if (!gb.width) continue;
-
+ 
 				const px = gb.left - svg_rect.left;
 				const py = gb.top + gb.height / 2 - svg_rect.top;
-
+ 
 				const child_pts = [];
 				for (const child of irpos.filter((t) => t.parent_task === node.name)) {
 					const $cbar = $body.find(`[data-irpo-tl="${child.name}"]`).find(".planner-bar-div");
@@ -1659,9 +1845,9 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 					});
 				}
 				if (!child_pts.length) continue;
-
+ 
 				const tx = Math.min(px, ...child_pts.map((p) => p.x)) - GUTTER;
-
+ 
 				for (const { x: bx, y: by } of child_pts) {
 					const r = Math.max(0, Math.min(CORNER, (bx - tx) / 2, (by - py) / 2));
 					const d = [
@@ -1675,7 +1861,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 					svg.appendChild(make_path(d, "#94a3b8", "1.5", "planner-arrowhead-fan"));
 				}
 			}
-
+ 
 			// ── 2. Sibling dependency arrows (only for real "depends on") ──
 			const groups = new Map();
 			irpos.forEach((t) => {
@@ -1683,7 +1869,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				if (!groups.has(t.parent_task)) groups.set(t.parent_task, []);
 				groups.get(t.parent_task).push(t);
 			});
-
+ 
 			const deps_map = new Map();
 			for (const group of groups.values()) {
 				const by_name = new Set(group.map((t) => t.name));
@@ -1696,24 +1882,24 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 					if (pred) deps_map.set(t.name, pred);
 				});
 			}
-
+ 
 			const R = 6;
 			for (const [child_name, parent_name] of deps_map) {
 				const $pbar = $body.find(`[data-irpo-tl="${parent_name}"]`).find(".planner-bar-div");
 				const $cbar = $body.find(`[data-irpo-tl="${child_name}"]`).find(".planner-bar-div");
 				if (!$pbar.length || !$cbar.length) continue;
-
+ 
 				const pb = $pbar[0].getBoundingClientRect();
 				const cb = $cbar[0].getBoundingClientRect();
-
+ 
 				const x1 = pb.right - svg_rect.left;
 				const y1 = pb.top + pb.height / 2 - svg_rect.top;
 				const x2 = cb.left - svg_rect.left;
 				const y2 = cb.top + cb.height / 2 - svg_rect.top;
-
+ 
 				const mid_x = Math.max(x1 + 14, x2 - 14);
 				const ry = y2 > y1 ? R : -R;
-
+ 
 				const d = [
 					`M ${x1} ${y1}`,
 					`H ${mid_x - R}`,
@@ -1726,16 +1912,20 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			}
 		});
 	}
-
-
+ 
+ 
 	_gantt_row(irpo, days) {
 		const start_obj = irpo.exp_start_date ? frappe.datetime.str_to_obj(irpo.exp_start_date) : null;
 		const end_obj = irpo.exp_end_date ? frappe.datetime.str_to_obj(irpo.exp_end_date) : null;
 		const label = frappe.utils.escape_html(irpo.subject || irpo.name);
 		const pct = flt(irpo.consumed_pct || irpo.progress || 0);
-		const bar_style = irpo.color
+		const is_held = this._irpo_status(irpo) === "On Hold";
+		// A held bar ignores the task colour so the state is unmistakable.
+		const bar_style = irpo.color && !is_held
 			? ` style="background:${frappe.utils.escape_html(irpo.color)};box-shadow:0 1px 3px ${frappe.utils.escape_html(irpo.color)}80"`
 			: "";
+		const bar_cls = is_held ? "planner-bar-div planner-bar-div--hold" : "planner-bar-div";
+		const bar_label = is_held ? `&#10074;&#10074; ${label} (${__("On Hold")})` : label;
 		let bar_start_idx = -1;
 		let bar_span = 0;
 		days.forEach((day, i) => {
@@ -1759,19 +1949,19 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 					// We store the span count as a data attribute so post-render JS can
 					// compute the exact pixel width after layout.
 					return `<td class="${base_cls} planner-gantt-start" data-bar-start data-bar-cols="${bar_span}">` +
-						`<div class="planner-bar-div"${bar_style}` +
+						`<div class="${bar_cls}"${bar_style}` +
 						` data-tt-title="${label}"` +
 						` data-tt-start="${frappe.utils.escape_html(tt_start)}"` +
 						` data-tt-end="${frappe.utils.escape_html(tt_end)}"` +
 						` data-tt-pct="${tt_pct}"` +
-						`><span class="planner-bar-label">${label}</span></div></td>`;
+						`><span class="planner-bar-label">${bar_label}</span></div></td>`;
 				}
 				return `<td class="${base_cls}"></td>`;
 			})
 			.join("");
 		return `<tr class="planner-tl-leaf-row" data-irpo-tl="${frappe.utils.escape_html(irpo.name)}">${cells}</tr>`;
 	}
-
+ 
 	// Renders a BOQ Node group row as a date-spanning bar in the timeline.
 	// Uses node.color when set; falls back to the default grey CSS rule.
 	// Start and end are derived from the earliest/latest dates among children.
@@ -1781,7 +1971,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		const bar_style = node.color
 			? ` style="background:${frappe.utils.escape_html(node.color)};box-shadow:0 1px 3px ${frappe.utils.escape_html(node.color)}80"`
 			: "";
-
+ 
 		// Compute bar span from children's date range.
 		const child_starts = children.map((c) => c.exp_start_date).filter(Boolean);
 		const child_ends   = children.map((c) => c.exp_end_date).filter(Boolean);
@@ -1793,7 +1983,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			: null;
 		const start_obj = bar_start_date ? frappe.datetime.str_to_obj(bar_start_date) : null;
 		const end_obj   = bar_end_date   ? frappe.datetime.str_to_obj(bar_end_date)   : null;
-
+ 
 		let bar_start_idx = -1;
 		let bar_span = 0;
 		days.forEach((day, i) => {
@@ -1803,12 +1993,12 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				bar_span++;
 			}
 		});
-
+ 
 		// Average progress across children.
 		const avg_pct = children.length
 			? Math.round(children.reduce((s, c) => s + flt(c.consumed_pct || c.progress || 0), 0) / children.length)
 			: 0;
-
+ 
 		const cells = days
 			.map((day, i) => {
 				const is_bar_start = i === bar_start_idx;
@@ -1829,18 +2019,18 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		// The <tr> carries data-boq-tl so the arrow renderer can find this row's bar.
 		return `<tr class="planner-tl-group-row" data-boq-tl="${frappe.utils.escape_html(node.name)}">${cells}</tr>`;
 	}
-
-
+ 
+ 
 	expand_all() {
 		this.collapsed.clear();
 		this._render();
 	}
-
+ 
 	collapse_all() {
 		this.tasks.filter((t) => t.cpc_node_type === "BOQ Node").forEach((t) => this.collapsed.add(t.name));
 		this._render();
 	}
-
+ 
 	_toggle_node(name) {
 		if (this.collapsed.has(name)) {
 			this.collapsed.delete(name);
@@ -1849,7 +2039,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		}
 		this._render();
 	}
-
+ 
 	async save_plan() {
 		const payload = Object.entries(this.pending_date_changes).map(([name, dates]) => ({ name, ...dates }));
 		if (!payload.length) {
@@ -1871,16 +2061,16 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			$btn.prop("disabled", false).text(__("Save Plan"));
 		}
 	}
-
+ 
 	_show_modal() {
 		this.$modal.removeClass("hide").attr("aria-hidden", "false");
 	}
-
+ 
 	close() {
 		this.close_weekly_progress();
 		this.$modal.addClass("hide").attr("aria-hidden", "true");
 	}
-
+ 
 	open_weekly_progress(irpo_name) {
 		const irpo = this.tasks.find((task) => task.name === irpo_name);
 		if (!irpo) return;
@@ -1896,14 +2086,14 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			}
 		);
 	}
-
+ 
 	close_weekly_progress() {
 		this.$root.find("[data-weekly-overlay]").addClass("hide").attr("aria-hidden", "true");
 		this.$modal.attr("aria-hidden", "false");
 		this.$root.find("[data-weekly-content]").empty();
 		this.weekly_progress = null;
 	}
-
+ 
 	// Creates the shared floating tooltip element for Gantt bar hovers.
 	_init_tooltip() {
 		this.$tooltip = $(`
@@ -1923,7 +2113,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			</div>
 		`).appendTo(document.body);
 	}
-
+ 
 	// Positions the tooltip near the cursor, clamped inside the viewport.
 	_position_tooltip(e) {
 		const tt = this.$tooltip[0];
@@ -1937,7 +2127,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		if (y - tt.offsetHeight < 8) y = e.clientY + 20;
 		this.$tooltip.css({ left: x, top: y });
 	}
-
+ 
 	_bind_modal_events() {
 		const $m = this.$modal;
 		$m.on("click", "[data-planner-close]", () => this.close());
@@ -1995,6 +2185,8 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		$m.on("click", "[data-open-task]", (e) => {
 			this.view.irpo_viewer.open($(e.currentTarget).data("open-task"));
 		});
+		$m.on("click", "[data-hold-irpo]", (e) => this._open_hold_dialog($(e.currentTarget).data("hold-irpo"), "hold"));
+		$m.on("click", "[data-resume-irpo]", (e) => this._open_hold_dialog($(e.currentTarget).data("resume-irpo"), "resume"));
 		$m.on("click", "[data-open-weekly]", (e) => {
 			this.open_weekly_progress($(e.currentTarget).data("open-weekly"));
 		});
@@ -2056,9 +2248,9 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			this.view.dialogs.open_contract();
 		});
 	}
-
+ 
 	// ---- Break IRPO dialog ----
-
+ 
 	_open_break_irpo_dialog(preselect_name = null) {
 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 		const boq_nodes = this.tasks.filter((t) => t.cpc_node_type === "BOQ Node");
@@ -2087,7 +2279,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		this._add_break_irpo_row();
 		$dlg.removeClass("hide").attr("aria-hidden", "false");
 	}
-
+ 
 	// Fetch existing Leaf IRPO tasks for the currently selected BOQ node
 	// and repopulate the dialog table so the user can edit them in-place.
 	async _fetch_previous_irpos() {
@@ -2123,7 +2315,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			$btn.prop("disabled", false);
 		}
 	}
-
+ 
 	// Switch between create mode ("Save IRPO Tasks") and update mode ("Update IRPO Tasks").
 	// Update mode also lifts the remaining-budget validation block.
 	_set_break_irpo_mode(mode) {
@@ -2132,12 +2324,12 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		const label = mode === "update" ? __("Update IRPO Tasks") : __("Save IRPO Tasks");
 		$dlg.find("[data-break-save]").text(label).prop("disabled", false);
 	}
-
+ 
 	_close_break_irpo_dialog() {
 		this.$root.find("#cc-break-irpo-modal").addClass("hide").attr("aria-hidden", "true");
 		this._break_irpo_mode = "create";
 	}
-
+ 
 	_on_boq_select_change() {
 		// Sync header color picker to the selected BOQ node's stored color
 		const $dlg = this.$root.find("#cc-break-irpo-modal");
@@ -2148,7 +2340,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		this._set_break_irpo_mode("create");
 		this._update_break_budget_summary();
 	}
-
+ 
 	_add_break_irpo_row(prefill = null) {
 		const today = frappe.datetime.get_today();
 		// Default color from the header color picker; prefilled rows use their stored color
@@ -2198,7 +2390,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		this.$root.find("[data-break-irpo-rows]").append($row);
 		this._update_break_budget_summary();
 	}
-
+ 
 	async _save_break_irpo() {
 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 		const boq_node_name = $dlg.find("[data-break-boq-select]").val();
@@ -2246,7 +2438,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			$btn.prop("disabled", false).text(label);
 		}
 	}
-
+ 
 	_update_break_budget_summary() {
 		const $dlg = this.$root.find("#cc-break-irpo-modal");
 		const $opt = $dlg.find("[data-break-boq-select] option:selected");
@@ -2280,7 +2472,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		// Block only when this dialog pushes the BOQ over budget (decreases always save)
 		$dlg.find("[data-break-save]").prop("disabled", remaining < 0 && new_total > 0);
 	}
-
+ 
 	// Collect the current dialog rows into plain data objects.
 	_collect_break_rows() {
 		const rows = [];
@@ -2302,7 +2494,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		});
 		return rows;
 	}
-
+ 
 	// Build an .xlsx from the dialog rows and trigger a client-side download.
 	async _download_break_irpo_rows() {
 		const $btn = this.$root.find("[data-break-download]");
@@ -2334,11 +2526,11 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			$btn.prop("disabled", false);
 		}
 	}
-
+ 
 	// Upload an .xlsx/.xls and append its rows to the dialog table.
 	_upload_break_irpo_rows() {
 		const $dlg = this.$root.find("#cc-break-irpo-modal");
-
+ 
 		// Keep the Frappe FileUploader dialog on top of our custom modal no
 		// matter the stacking/z-index of the environment: drop our overlay
 		// below bootstrap's modal (1040) while the picker is open and restore
@@ -2354,7 +2546,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 				$(".modal-backdrop").css("z-index", 1350);
 			}
 		});
-
+ 
 		new frappe.ui.FileUploader({
 			folder: "Home",
 			is_private: 1,
@@ -2397,8 +2589,8 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 			},
 		});
 	}
-
-
+ 
+ 
 	_date_range(start, end) {
 		const days = [];
 		const cur = new Date(start);
@@ -2408,7 +2600,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		}
 		return days;
 	}
-
+ 
 	_same_day(a, b) {
 		return (
 			a.getFullYear() === b.getFullYear() &&

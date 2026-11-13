@@ -17,9 +17,6 @@
 			<button class="btn btn-default" data-action="add-contract">
 				{{ _("Add Contract") }}
 			</button>
-			<button class="btn btn-default" data-action="add-sales-order">
-				{{ _("Add Sales Order") }}
-			</button>
 			<button class="btn btn-primary cc-open-planner" data-action="open-planner">
 				<svg viewBox="0 0 16 16" aria-hidden="true">
 					<path d="M3 13V8m5 5V3m5 10V6" />
@@ -62,8 +59,9 @@
 						<th>{{ _("Contract") }}</th>
 						<th>{{ _("Customer") }}</th>
 						<th>{{ _("Contract Date") }}</th>
-						<th class="cc-number">{{ _("Value") }}</th>
+						<th class="cc-value">{{ _("Value") }}</th>
 						<th>{{ _("Project") }}</th>
+						<th>{{ _("Project Financial Summary") }}</th>
 						<th>{{ _("SO / IRPO") }}</th>
 						<th class="cc-actions-heading">{{ _("Actions") }}</th>
 					</tr>
@@ -109,6 +107,14 @@
 							<div class="cc-contract-link-field">
 								<span>{{ _("Customer") }} <b>*</b></span>
 								<div data-contract-customer-field></div>
+							</div>
+							<label class="cc-contract-checkbox-label">
+								<input type="checkbox" data-field="use_existing_project" />
+								<span>{{ _("Use Existing Project?") }}</span>
+							</label>
+							<div class="cc-contract-link-field hide" data-contract-project-container>
+								<span>{{ _("Project") }} <b>*</b></span>
+								<div data-contract-project-field></div>
 							</div>
 							<label>
 								<span>{{ _("Ownership") }} <b>*</b></span>
@@ -242,7 +248,7 @@
 			</header>
 			<div class="cc-state-strip">
 				<div><span>{{ _("Source Contract") }}</span><strong data-so-contract-state>{{ _("Ready") }}</strong></div>
-				<div><span>{{ _("BOQ Items") }}</span><strong data-so-boq-state>{{ _("Loaded") }}</strong></div>
+				<div><span>{{ _("Items") }}</span><strong data-so-boq-state>{{ _("Empty") }}</strong></div>
 				<div>
 					<span>{{ _("Sales Order") }}</span><strong data-sales-order-state>{{ _("Draft Entry") }}</strong>
 				</div>
@@ -268,21 +274,27 @@
 				</div>
 				<div data-so-form-view>
 					<div class="cc-subsection-heading">
-						<h3>{{ _("Sales Order Items from BOQ") }}</h3>
+						<h3>{{ _("Sales Order Items") }}</h3>
 					</div>
 					<div class="cc-dialog-table-wrap">
 						<table class="cc-dialog-table">
 							<thead>
 								<tr>
-									<th>{{ _("Item / BOQ Code") }}</th>
+									<th>{{ _("Item") }}</th>
 									<th>{{ _("Description") }}</th>
 									<th>{{ _("Qty") }}</th>
 									<th>{{ _("Rate") }}</th>
 									<th>{{ _("Amount") }}</th>
+									<th></th>
 								</tr>
 							</thead>
 							<tbody data-sales-order-items></tbody>
 						</table>
+					</div>
+					<div class="cc-add-so-row-wrap">
+						<button type="button" class="btn btn-xs btn-default" data-add-so-item>
+							{{ _("+ Add Row") }}
+						</button>
 					</div>
 				</div>
 				<div class="hide" data-so-progress-view>
@@ -358,18 +370,6 @@
 				</div>
 			</div>
 			<div class="planner-topbar-right">
-				<button class="btn btn-default btn-sm planner-topbar-btn" data-action="add-contract">
-					<svg viewBox="0 0 16 16" aria-hidden="true">
-						<path d="M8 3v10M3 8h10" />
-					</svg>
-					{{ _("Add Contract") }}
-				</button>
-				<button class="btn btn-default btn-sm planner-topbar-btn planner-so-approved-btn">
-					<svg viewBox="0 0 16 16" aria-hidden="true">
-						<path d="M3 8l3 3 7-7" />
-					</svg>
-					{{ _("Sales Order Approved") }}
-				</button>
 				<button class="btn btn-default btn-sm planner-topbar-btn planner-break-btn" data-planner-break-irpo>
 					<svg viewBox="0 0 16 16" aria-hidden="true">
 						<path d="M4 8h3m2 0h3M8 4v3m0 2v3" />
@@ -441,24 +441,26 @@
 							<col class="planner-col-consumed" />
 							<col class="planner-col-progress" />
 							<col class="planner-col-weekly" />
+							<col class="planner-col-status" />
 							<col class="planner-col-actions" />
 						</colgroup>
 						<thead>
 							<tr>
 								<th class="planner-wbs-th-main">{{ _("GROUP / LEAF IRPO") }}</th>
-								<th>{{ _("UOM") }}</th>
+								<th class="planner-center">{{ _("UOM") }}</th>
 								<th class="planner-num">{{ _("QTY") }}</th>
-								<th class="planner-num">{{ _("BUDGET (SAR)") }}</th>
-								<th>{{ _("PENDING BUDGET") }}</th>
-								<th>{{ _("CONSUMED BUDGET") }}</th>
-								<th>{{ _("PROGRESS") }}</th>
-								<th>{{ _("WEEKLY PROGRESS") }}</th>
-								<th>{{ _("ACTIONS") }}</th>
+								<th class="planner-num">{{ _("BUDGET") }}<br>{{ _("(SAR)") }}</th>
+								<th class="planner-num">{{ _("PENDING") }}<br>{{ _("BUDGET") }}</th>
+								<th class="planner-center">{{ _("CONSUMED") }}<br>{{ _("BUDGET") }}</th>
+								<th class="planner-center">{{ _("PROGRESS") }}</th>
+								<th class="planner-center">{{ _("WEEKLY") }}<br>{{ _("PROGRESS") }}</th>
+								<th class="planner-center">{{ _("STATUS") }}</th>
+								<th class="planner-center">{{ _("ACTIONS") }}</th>
 							</tr>
 						</thead>
 						<tbody data-planner-wbs-body>
 							<tr>
-								<td colspan="9" class="planner-empty">{{ _("Loading…") }}</td>
+								<td colspan="10" class="planner-empty">{{ _("Loading…") }}</td>
 							</tr>
 						</tbody>
 					</table>
@@ -477,6 +479,7 @@
 				</div>
 			</div>
 		</div>
+
 	</div>
 	<!-- /IRPO Planner overlay -->
 

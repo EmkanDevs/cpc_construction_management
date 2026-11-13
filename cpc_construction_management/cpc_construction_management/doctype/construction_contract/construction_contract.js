@@ -106,22 +106,13 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Construction Contract", {
+	onload(frm) {
+		setup_project_query(frm);
+		toggle_revision_fields(frm);
+	},
+
 	refresh(frm) {
-		// US-02: "Create Item Master" — visible in Draft; also runs
-		// automatically on submit via on_submit in the controller.
-		// if (frm.doc.docstatus === 0 && !frm.is_new() && (frm.doc.boq_items || []).length) {
-		// 	frm.add_custom_button(__("Create Item Master"), () => {
-		// 		frappe.confirm(
-		// 			__("Create finished-good Items for any BOQ lines that don't have one yet?"),
-		// 			() => {
-		// 				frm.call("create_item_master").then(() => {
-		// 					frm.reload_doc();
-		// 					frappe.show_alert({ message: __("Item Master updated"), indicator: "green" });
-		// 				});
-		// 			}
-		// 		);
-		// 	});
-		// }
+		setup_project_query(frm);
 
 		if (!frm.is_new()) {
 			frm.add_custom_button(__("Create Sales Order"), () => {
@@ -132,11 +123,58 @@ frappe.ui.form.on("Construction Contract", {
 		toggle_revision_fields(frm);
 	},
 
-	onload(frm) {
-		toggle_revision_fields(frm);
+	company(frm) {
+		validate_or_clear_project(frm);
 	},
-	
+
+	customer(frm) {
+		validate_or_clear_project(frm);
+	},
+
+	use_existing_project(frm) {
+		if (!frm.doc.use_existing_project) {
+			frm.set_value("project", "");
+		}
+	},
 });
+
+function setup_project_query(frm) {
+	frm.set_query("project", () => {
+		if (!frm.doc.company || !frm.doc.customer) {
+			frappe.msgprint({
+				title: __("Missing Filters"),
+				indicator: "orange",
+				message: __("Please select Company and Customer first to see available projects.")
+			});
+			return {
+				filters: {
+					name: ["=", ""]
+				}
+			};
+		}
+		return {
+			filters: {
+				company: frm.doc.company,
+				customer: frm.doc.customer
+			}
+		};
+	});
+}
+
+function validate_or_clear_project(frm) {
+	if (frm.doc.project) {
+		frappe.db.get_value("Project", frm.doc.project, ["company", "customer"]).then((r) => {
+			if (r && r.message) {
+				if (
+					(frm.doc.company && r.message.company !== frm.doc.company) ||
+					(frm.doc.customer && r.message.customer !== frm.doc.customer)
+				) {
+					frm.set_value("project", "");
+				}
+			}
+		});
+	}
+}
 
 function create_sales_order(frm) {
 	// Open a new Sales Order with cpc_contract pre-set. Passing it through

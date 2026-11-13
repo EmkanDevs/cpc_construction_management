@@ -8,6 +8,8 @@
  "field_order": [
   "contract_title",
   "customer",
+  "use_existing_project",
+  "project",
   "ownership",
   "contract_nature",
   "column_break_1",
@@ -31,7 +33,6 @@
   "change_order_value",
   "revised_value",
   "section_break_link",
-  "project",
   "amended_from"
  ],
  "fields": [
@@ -161,12 +162,13 @@
    "fieldtype": "Section Break"
   },
   {
-   "description": "Set automatically on submit; one Project per contract.",
+   "depends_on": "eval:doc.use_existing_project == 1 || doc.docstatus == 1 || doc.project",
    "fieldname": "project",
    "fieldtype": "Link",
    "label": "Project",
+   "mandatory_depends_on": "eval:doc.use_existing_project == 1",
    "options": "Project",
-   "read_only": 1
+   "read_only_depends_on": "eval:doc.docstatus == 1"
   },
   {
    "fieldname": "amended_from",
@@ -196,13 +198,19 @@
    "fieldtype": "Percent",
    "label": "Target Margin %",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "use_existing_project",
+   "fieldtype": "Check",
+   "label": "Use Existing Project?"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-18 11:08:21.355316",
+ "modified": "2026-10-28 13:41:39.381594",
  "modified_by": "Administrator",
  "module": "Cpc Construction Management",
  "name": "Construction Contract",

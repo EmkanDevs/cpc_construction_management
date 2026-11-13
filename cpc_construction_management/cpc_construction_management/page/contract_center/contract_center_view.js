@@ -341,7 +341,7 @@ cpc_construction_management.contract_center.View = class ContractCenterView {
 				this.get_irpo_tasks(),
 			]);
 			this.sales_order_items = await this.get_sales_order_items();
-			await this.attach_customer_names();
+			await Promise.all([this.attach_customer_names(), this.attach_project_names()]);
 			this.build_relationships();
 			this.selected_name = this.find_selected_name();
 			if (!this.expanded.size && this.selected_name) this.expanded.add(this.selected_name);
@@ -396,8 +396,38 @@ cpc_construction_management.contract_center.View = class ContractCenterView {
 					row.customer_name = names[row.customer] || row.customer;
 				});
 			})
+		.catch(() => {
+			/* fall back to Customer IDs if names can't be read */
+		});
+	}
+
+	// Resolve Project name (Project.project_name) in bulk for display.
+	attach_project_names() {
+		const ids = [
+			...new Set(
+				[...this.contracts, ...this.sales_orders]
+					.map((row) => row.project)
+					.filter(Boolean)
+			),
+		];
+		if (!ids.length) return Promise.resolve();
+		return frappe.db
+			.get_list("Project", {
+				fields: ["name", "project_name"],
+				filters: { name: ["in", ids] },
+				limit: 0,
+			})
+			.then((rows) => {
+				const names = {};
+				rows.forEach((r) => {
+					names[r.name] = r.project_name || r.name;
+				});
+				[...this.contracts, ...this.sales_orders].forEach((row) => {
+					row.project_name = names[row.project] || row.project;
+				});
+			})
 			.catch(() => {
-				/* fall back to Customer IDs if names can't be read */
+				/* fall back to Project IDs if names can't be read */
 			});
 	}
 
@@ -493,10 +523,13 @@ cpc_construction_management.contract_center.View = class ContractCenterView {
 		const $target = $(event.currentTarget);
 		const action = $target.data("action");
 		const name = $target.data("name");
+		const project = $target.data("project") || $target.attr("data-project") || null;
+		const so_name = $target.data("so") || $target.attr("data-so") || null;
 		if (action === "clear-filters") this.clear_filters();
 		if (action === "toggle-contract") this.toggle_contract(name);
 		if (action === "open-contract") this.open_document("Construction Contract", name);
 		if (action === "open-project") this.open_document("Project", name);
+		if (action === "open-project-financial-summary") this.open_project_financial_summary(project || name);
 		if (action === "open-customer") frappe.set_route("Form", "Customer", name);
 		if (action === "open-sales-order") {
 			this.dialogs.close("cc-sales-order-modal");
@@ -506,7 +539,7 @@ cpc_construction_management.contract_center.View = class ContractCenterView {
 		if (action === "open-contract-dialog") this.open_contract_dialog_for(name);
 		if (action === "add-contract") this.dialogs.open_contract();
 		if (action === "add-sales-order") this.open_sales_order_dialog(name);
-		if (action === "open-planner") this.open_planner(name);
+		if (action === "open-planner") this.open_planner(name, so_name === "" ? null : so_name);
 		if (action === "paginate") this.go_to_page(Number($target.data("page")));
 	}
 
@@ -614,6 +647,14 @@ cpc_construction_management.contract_center.View = class ContractCenterView {
 		this.dialogs.close("cc-contract-modal");
 		this.dialogs.close("cc-sales-order-modal");
 		frappe.set_route("Form", doctype, name);
+	}
+
+	open_project_financial_summary(project) {
+		if (!project) return;
+		this.dialogs.close("cc-contract-modal");
+		this.dialogs.close("cc-sales-order-modal");
+		frappe.route_options = { project: project };
+		frappe.set_route("project-financial-summary");
 	}
 
 	find_selected_name() {

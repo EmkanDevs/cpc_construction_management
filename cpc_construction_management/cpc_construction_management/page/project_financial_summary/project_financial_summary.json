@@ -1,0 +1,35 @@
+{
+ "content": null,
+ "creation": "2026-11-04 11:22:06.296080",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-11-04 11:22:39.810924",
+ "modified_by": "Administrator",
+ "module": "Cpc Construction Management",
+ "name": "project-financial-summary",
+ "owner": "Administrator",
+ "page_name": "project-financial-summary",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "Projects User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Project Financial Summary"
+}

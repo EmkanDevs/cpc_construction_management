@@ -1,3 +1,4 @@
+
 // /**
 //  * IRPO Task Detail Viewer
 //  * Opens when the 👁 eye button on a Leaf IRPO row is clicked in the planner.
@@ -98,6 +99,12 @@
 // 			}
 // 			if (!Array.isArray(names) || !names.length) return;
 // 			this.close();
+// 			// W-05: a single linked document (e.g. the IRPO's Budget) opens the
+// 			// record itself; several open the list filtered to them.
+// 			if (names.length === 1) {
+// 				frappe.set_route("Form", doctype, names[0]);
+// 				return;
+// 			}
 // 			frappe.route_options = { name: ["in", names] };
 // 			frappe.set_route("List", doctype);
 // 		});
@@ -876,14 +883,36 @@
 
 // 	// ── Edit mode ───────────────────────────────────────────────────────────
 
-// 	// Show/hide the Items + Unplanned grids' editing affordances. The grid cells
-// 	// stay populated and readable at all times — only "Add Row" and the per-row
-// 	// delete controls appear once "Edit Document" is active, so the read-only
-// 	// view has no dangling actions that cannot be saved.
+// 	// Toggle the Items + Unplanned grids between read-only and editable. The grid
+// 	// cells stay populated and readable at all times; the inline inputs and Link
+// 	// controls only become editable, and the "Add Row" / per-row delete controls
+// 	// only appear, once "Edit Document" is active.
 // 	_set_items_editable(on) {
-// 		this.$modal
-// 			.find("[data-items-bottom-bar], [data-unplanned-bottom-bar], .cc-items-del-col")
+// 		const $m = this.$modal;
+// 		$m.find("[data-items-bottom-bar], [data-unplanned-bottom-bar], .cc-items-del-col")
 // 			.toggleClass("hide", !on);
+
+// 		// Numeric cells (QTY / Amount).
+// 		$m.find(".cc-items-table")
+// 			.toggleClass("cc-items-grid-readonly", !on)
+// 			.find(".cc-items-edit-input")
+// 			.prop("readonly", !on)
+// 			.prop("disabled", !on);
+
+// 		// Item / IRPO Item Type Link controls.
+// 		$m.find("#cc-items-table-body tr, #cc-unplanned-table-body tr").each((_, tr) => {
+// 			const $tr = $(tr);
+// 			["type-control", "item-control"].forEach((key) => {
+// 				const ctrl = $tr.data(key);
+// 				if (!ctrl) return;
+// 				if (ctrl.$input) {
+// 					ctrl.$input.prop("readonly", !on);
+// 				}
+// 				if (ctrl.$wrapper) {
+// 					ctrl.$wrapper.toggleClass("cc-items-control-locked", !on);
+// 				}
+// 			});
+// 		});
 // 	}
 
 // 	_enter_edit_mode() {
@@ -1047,6 +1076,18 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * IRPO Task Detail Viewer
  * Opens when the 👁 eye button on a Leaf IRPO row is clicked in the planner.
@@ -1072,7 +1113,7 @@ const IRPO_VIEWER_STATUS_COLORS = {
 	Cancelled: "gray",
 	Template: "blue",
 };
-
+ 
 cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 	constructor(view) {
 		this.view = view;
@@ -1083,9 +1124,9 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 		this._task = null;
 		this._bind_events();
 	}
-
+ 
 	// ── Public ──────────────────────────────────────────────────────────────
-
+ 
 	async open(task_name) {
 		this._task_name = task_name;
 		this._edit_mode = false;
@@ -1098,39 +1139,40 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 				method: "cpc_construction_management.cpc_construction_management.doc_events.task.get_irpo_task_detail",
 				args: { task_name },
 			});
-			if (!r || !r.message) {
+			if (!r || !r.message) {    
 				this._render_error();
 				console.error("IRPOViewer: empty response for task", task_name);
 				return;
 			}
 			this._task = r.message;
+			await this._load_reporting_summary(task_name);
 			this._render_all();
 		} catch (err) {
 			this._render_error();
 			console.error("IRPOViewer load error", err);
 		}
 	}
-
+ 
 	close() {
 		this.$modal.addClass("hide").attr("aria-hidden", "true");
 		this._task = null;
 		this._task_name = null;
 		this._exit_edit_mode();
 	}
-
+ 
 	// ── Event binding ───────────────────────────────────────────────────────
-
+ 
 	_bind_events() {
 		const $m = this.$modal;
-
+ 
 		// Close
 		$m.on("click", "[data-irpo-viewer-close]", () => this.close());
-
+ 
 		// Tab switching
 		$m.on("click", "[data-viewer-tab]", (e) => {
 			this._set_tab($(e.currentTarget).data("viewer-tab"));
 		});
-
+ 
 		// Connections: open the doctype list filtered to the linked entries,
 		// exactly like the Frappe Connections sidebar (count badge per doctype).
 		$m.on("click", ".cc-viewer-conn-chip", (e) => {
@@ -1156,7 +1198,7 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 			frappe.route_options = { name: ["in", names] };
 			frappe.set_route("List", doctype);
 		});
-
+ 
 		// Create Material Request from this IRPO/Task — close the viewer first so
 		// the MR dialog is not hidden behind this modal.
 		$m.on("click", "[data-viewer-create-mr]", () => {
@@ -1165,41 +1207,41 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 			this.close();
 			this.view.mr_dialog.open(task);
 		});
-
+ 
 		// Edit Document button
 		$m.on("click", "[data-viewer-edit]", () => this._enter_edit_mode());
-
+ 
 		// Save button — persists the Overview & General fields *and* the
 		// Items grid, so there is a single save action for the whole dialog.
 		$m.on("click", "[data-viewer-save]", () => this._save());
-
+ 
 		// Cancel edit
 		$m.on("click", "[data-viewer-cancel-edit]", () => this._exit_edit_mode());
-
+ 
 		// Items grid: Add Row
 		$m.on("click", "[data-items-add-row]", () => this._items_add_row());
-
+ 
 		// Items grid: Delete Row
 		$m.on("click", "[data-items-del-row]", (e) => {
 			$(e.currentTarget).closest("tr").remove();
 			this._items_mark_dirty();
 		});
-
+ 
 		// Items grid: track changes
 		$m.on("input change", "[data-viewer-panel='items'] .cc-items-edit-input", () => this._items_mark_dirty());
-
+ 
 		// Unplanned Items grid: Add Row
 		$m.on("click", "[data-unplanned-add-row]", () => this._unplanned_add_row());
-
+ 
 		// Unplanned Items grid: Delete Row
 		$m.on("click", "[data-unplanned-del-row]", (e) => {
 			$(e.currentTarget).closest("tr").remove();
 			this._unplanned_mark_dirty();
 		});
-
+ 
 		// Unplanned Items grid: track changes
 		$m.on("input change", "[data-viewer-panel='unplanned_items'] .cc-items-edit-input", () => this._unplanned_mark_dirty());
-
+ 
 		// Color picker: live-update the hex label on 'input' (while the picker is
 		// open) and save to the server on 'change' (when the picker is closed).
 		$m.on("input", "[data-viewer-color-pick]", (e) => {
@@ -1210,15 +1252,15 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 			const color = $(e.currentTarget).val();
 			this._save_color(color);
 		});
-
+ 
 		// Escape key
 		$(document).on("keydown.irpo-viewer", (e) => {
 			if (e.key === "Escape" && !$m.hasClass("hide")) this.close();
 		});
 	}
-
+ 
 	// ── Tab management ──────────────────────────────────────────────────────
-
+ 
 	_set_tab(tab_id) {
 		const $m = this.$modal;
 		$m.find("[data-viewer-tab]").removeClass("cc-viewer-tab-active");
@@ -1227,9 +1269,9 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 		$m.find(`[data-viewer-panel='${tab_id}']`).removeClass("hide");
 		$m.find(".cc-irpo-viewer-card").toggleClass("cc-viewer-wide", tab_id === "items" || tab_id === "unplanned_items");
 	}
-
+ 
 	// ── Loading / error states ──────────────────────────────────────────────
-
+ 
 	_render_loading() {
 		const $m = this.$modal;
 		$m.find(".cc-viewer-header-title").html(
@@ -1244,20 +1286,20 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 			);
 		});
 	}
-
+ 
 	_render_error() {
 		const msg = `<p class="cc-viewer-error">${__("Could not load IRPO task details.")}</p>`;
 		this.$modal.find("[data-viewer-panel='overview']").html(msg);
 		this.$modal.find("[data-viewer-panel='items']").html(msg);
 		this.$modal.find("[data-viewer-panel='unplanned_items']").html(msg);
 	}
-
+ 
 	// ── Full render ─────────────────────────────────────────────────────────
-
+ 
 	_render_all() {
 		const t = this._task;
 		const $m = this.$modal;
-
+ 
 		// ---- Header ----
 		const so_part = t.cpc_sales_order ? `: ${frappe.utils.escape_html(t.cpc_sales_order)}` : "";
 		const status_color = IRPO_VIEWER_STATUS_COLORS[t.status] || "gray";
@@ -1268,30 +1310,30 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 		const boq_label = t.cpc_boq_code ? `• ${__("BOQ Item")}: <strong>${frappe.utils.escape_html(t.cpc_boq_code)}</strong>` : "";
 		const proj_label = t.project ? `${__("Project")}: <strong>${frappe.utils.escape_html(t.project_name || t.project)}</strong>` : "";
 		$m.find(".cc-viewer-header-sub").html(`${proj_label} ${boq_label}`);
-
+ 
 		// ---- Tab 1: Overview & General ----
 		$m.find("[data-viewer-panel='overview']").html(this._render_overview(t));
-
+ 
 		// ---- Tab 2: Items Details ----
 		$m.find("[data-viewer-panel='items']").html(this._render_items(t));
 		this._items_make_controls();
-
+ 
 		// ---- Tab 3: Unplanned Item Details ----
 		$m.find("[data-viewer-panel='unplanned_items']").html(this._render_unplanned_items(t));
 		this._unplanned_make_controls();
-
+ 
 		// ---- Tab 4: Dual Budget & Consumption ----
 		$m.find("[data-viewer-panel='budget']").html(this._render_budget(t));
-
+ 
 		// ---- Tab 5: Progress & History ----
 		$m.find("[data-viewer-panel='progress']").html(this._render_progress(t));
-
+ 
 		// Reset edit mode UI
 		this._exit_edit_mode();
 	}
-
+ 
 	// ── Tab renderers ───────────────────────────────────────────────────────
-
+ 
 	// Horizontal row of linked-document connections (Budget / Material Request /
 	// Purchase Order) shown above the Overview fields. Each doctype is a single
 	// clickable badge showing the connection count, in the style of Frappe's
@@ -1321,7 +1363,7 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 		<div class="cc-viewer-conn-chips">${chips}</div>
 	</div>`;
 		}).join("");
-
+ 
 		return `
 <h4 class="cc-viewer-section-title">${__("Connections")}</h4>
 <div class="cc-viewer-connections-wrap">
@@ -1335,12 +1377,12 @@ cpc_construction_management.contract_center.IRPOViewer = class IRPOViewer {
 	</div>
 </div>`;
 	}
-
+ 
 	_render_overview(t) {
 		const fmt_money = (v) => format_currency(flt(v), "SAR");
 		const fmt_num = (v) => (v == null || v === "" ? "—" : flt(v));
 		const fmt_text = (v) => (v == null || v === "" ? "—" : frappe.utils.escape_html(v));
-
+ 
 		return `
 ${this._render_connections(t)}
 <div class="cc-viewer-section-row cc-viewer-three-col">
@@ -1360,7 +1402,7 @@ ${this._render_connections(t)}
 		</div>
 	</div>
 </div>
-
+ 
 <div class="cc-viewer-three-col">
 	<div class="cc-viewer-field">
 		<label>${__("Sales Order (RPO)")}</label>
@@ -1400,7 +1442,7 @@ ${this._render_connections(t)}
 		</div>
 	</div>
 </div>
-
+ 
 <h4 class="cc-viewer-section-title">${__("CPC / IRPO")}</h4>
 <div class="cc-viewer-three-col">
 	<div class="cc-viewer-field">
@@ -1432,15 +1474,93 @@ ${this._render_connections(t)}
 		<div class="cc-viewer-value cc-viewer-editable" data-edit-field="account"
 			data-link-doctype="Account">${fmt_text(t.account)}</div>
 	</div>
+</div>
+${this._render_reporting_sections()}`;
+	}
+ 
+	// ── Weekly Progress Reporting + Official Progress (read-only) ──────────
+ 
+	async _load_reporting_summary(task_name) {
+		this._reporting = null;
+		try {
+			const r = await frappe.call({
+				method: "cpc_construction_management.cpc_construction_management.progress.planner_hold.get_irpo_reporting_summary",
+				args: { task_name },
+			});
+			this._reporting = r.message || null;
+		} catch (err) {
+			// Non-fatal: the rest of the overview still renders.
+			console.warn("IRPOViewer reporting summary load error", err);
+		}
+	}
+ 
+	_render_reporting_sections() {
+		const rp = this._reporting;
+		if (!rp) return "";
+		const esc = (v) => (v == null || v === "" ? "—" : frappe.utils.escape_html(String(v)));
+		const fmt_date = (d) => (d ? frappe.datetime.str_to_user(d) : "—");
+		const fmt_num = (v) => (v == null || v === "" ? "—" : flt(v));
+		const history = (rp.history || [])
+			.map(
+				(h) => `<tr>
+					<td><strong>${esc(h.event_type)}</strong></td>
+					<td>${fmt_date(h.effective_date)}</td>
+					<td>${esc(h.reason)}</td>
+					<td>${esc(h.recorded_by)}</td>
+				</tr>`
+			)
+			.join("");
+		return `
+<h4 class="cc-viewer-section-title" style="margin-top:24px">${__("Weekly Progress Reporting")}</h4>
+<div class="cc-viewer-section-row cc-viewer-three-col" style="grid-template-columns: 1fr 2fr">
+	<div>
+		<div class="cc-viewer-field">
+			<label>${__("Reporting Anchor (Locked)")}</label>
+			<div class="cc-viewer-value">${fmt_date(rp.reporting_anchor)}</div>
+			<small class="text-muted">${__("Execution Week 1 anchor. Empty until the first approved IRPO Progress record locks it (falls back to Expected Start Date until then).")}</small>
+		</div>
+		<div class="cc-viewer-field">
+			<label>${__("Reporting Closed (Completed)")}</label>
+			<div class="cc-viewer-value">${rp.reporting_closed ? __("Yes") : __("No")}</div>
+		</div>
+	</div>
+	<div class="cc-viewer-field">
+		<label>${__("Reporting Status History")}</label>
+		<small class="text-muted">${__("Hold / Resume / Completed / Reopened / Schedule Change events. Managed only through the reporting-status actions.")}</small>
+		<div class="cc-viewer-table-wrap">
+			<table class="cc-viewer-table">
+				<thead><tr>
+					<th>${__("Event")}</th><th>${__("Effective Date")}</th><th>${__("Reason")}</th><th>${__("Recorded By")}</th>
+				</tr></thead>
+				<tbody>${history || `<tr><td colspan="4" class="text-muted">${__("No events recorded.")}</td></tr>`}</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+ 
+<h4 class="cc-viewer-section-title" style="margin-top:12px">${__("Official Progress (Approved Records Only)")}</h4>
+<div class="cc-viewer-three-col">
+	<div class="cc-viewer-field">
+		<label>${__("Approved Cumulative Qty")}</label>
+		<div class="cc-viewer-value">${fmt_num(rp.approved_qty)}</div>
+	</div>
+	<div class="cc-viewer-field">
+		<label>${__("Progress Base Used")}</label>
+		<div class="cc-viewer-value">${fmt_num(rp.progress_base)}</div>
+	</div>
+	<div class="cc-viewer-field">
+		<label>${__("Latest Approved Period")}</label>
+		<div class="cc-viewer-value">${esc(rp.latest_approved_period)}</div>
+	</div>
 </div>`;
 	}
-
+ 
 	_render_items(t) {
 		const rows = t.items || [];
-
+ 
 		// Build editable row HTML for each existing item
 		const rows_html = rows.map((r) => this._items_row_html(r)).join("");
-
+ 
 		return `
 <h4 class="cc-viewer-section-title">${__("ITEMS DETAILS")}</h4>
 <span class="cc-items-dirty-badge hide" data-items-dirty-indicator>${__("Unsaved changes")}</span>
@@ -1474,7 +1594,7 @@ ${this._render_connections(t)}
 	</div>
 </div>`;
 	}
-
+ 
 	// Build a single editable table row for the items grid.
 	_items_row_html(r) {
 		const num = (v) => flt(v);
@@ -1518,7 +1638,7 @@ ${this._render_connections(t)}
 	</td>
 </tr>`;
 	}
-
+ 
 	// Build Item / UOM Link controls (same pattern as the Break IRPO dialog) for
 	// every data row present in the items table.
 	_items_make_controls() {
@@ -1526,14 +1646,14 @@ ${this._render_connections(t)}
 			this._items_make_row_controls($(tr));
 		});
 	}
-
+ 
 	// Create the Item + IRPO Item Type Link controls for a single table row
 	// (shared by both the Items and Unplanned grids).
 	_items_make_row_controls($tr) {
 		if ($tr.data("controls-made")) return;
-
+ 
 		const me = this;
-
+ 
 		// IRPO Item Type link control
 		const $type_parent = $tr.find(".cc-items-type-control");
 		const type_ctrl = frappe.ui.form.make_control({
@@ -1559,7 +1679,7 @@ ${this._render_connections(t)}
 		const type_val = $type_parent.attr("data-value") || "";
 		if (type_ctrl.$input) type_ctrl.$input.val(type_val);
 		type_ctrl.set_value(type_val);
-
+ 
 		// Item link control
 		const $parent = $tr.find(".cc-items-item-control");
 		const item_ctrl = frappe.ui.form.make_control({
@@ -1574,10 +1694,10 @@ ${this._render_connections(t)}
 			render_input: true,
 			only_input: true,
 		});
-
+ 
 		$tr.data("item-control", item_ctrl);
 		$tr.data("controls-made", true);
-
+ 
 		// A Link control is a plain `frappe.ui.form.ControlLink` instance, so it
 		// has no jQuery-style `.on()`. Watch the input and the clear button
 		// instead of `df.change`, which would also fire on the programmatic
@@ -1595,13 +1715,13 @@ ${this._render_connections(t)}
 		});
 		item_ctrl.$input.on("change", () => on_item_change(null));
 		item_ctrl.$wrapper.on("click", ".btn-clear", () => on_item_change(""));
-
+ 
 		// Restore the existing value into the visible input.
 		const item_val = $parent.attr("data-value") || "";
 		if (item_ctrl.$input) item_ctrl.$input.val(item_val);
 		item_ctrl.set_value(item_val);
 	}
-
+ 
 	// On change of the Item Link control of a row: validate the code against the
 	// Item doctype and keep the read-only UOM in step with the Item's stock UOM.
 	// item_code_override is passed directly from awesomplete-selectcomplete so we
@@ -1611,13 +1731,13 @@ ${this._render_connections(t)}
 			? item_code_override
 			: (item_ctrl.get_value() || item_ctrl.$input.val() || "")
 		).trim();
-
+ 
 		if (!item_code) {
 			this._items_set_row_uom($tr, "");
 			$tr.find(".cc-items-name-value").text("—");
 			return;
 		}
-
+ 
 		frappe.call({
 			method: "frappe.client.get_value",
 			args: { doctype: "Item", filters: { name: item_code }, fieldname: ["item_name", "stock_uom"] },
@@ -1632,19 +1752,19 @@ ${this._render_connections(t)}
 			},
 		});
 	}
-
+ 
 	// UOM is read-only in this grid: it always mirrors the Item's stock UOM.
 	// The hidden input is what gets submitted by _collect_items_data.
 	_items_set_row_uom($tr, uom) {
 		$tr.find("[data-items-field='uom']").val(uom || "");
 		$tr.find(".cc-items-uom-value").text(uom || "—");
 	}
-
+ 
 	// Mark the items tab as having unsaved changes.
 	_items_mark_dirty() {
 		this.$modal.find("[data-items-dirty-indicator]").removeClass("hide");
 	}
-
+ 
 	// Mark whichever grid panel a row belongs to as dirty. Used by the shared
 	// row-control change handlers so both the Items and Unplanned grids work.
 	_mark_dirty_for($tr) {
@@ -1652,7 +1772,7 @@ ${this._render_connections(t)}
 		if (panel === "unplanned_items") this._unplanned_mark_dirty();
 		else this._items_mark_dirty();
 	}
-
+ 
 	// Append a blank editable row to the items table.
 	_items_add_row() {
 		const blank = {
@@ -1670,7 +1790,7 @@ ${this._render_connections(t)}
 		const item_ctrl = this.$modal.find("#cc-items-table-body tr:last-child").data("item-control");
 		if (item_ctrl) item_ctrl.$input.focus();
 	}
-
+ 
 	// Collect all rows from the editable items table.
 	_collect_items_data() {
 		const items = [];
@@ -1691,7 +1811,7 @@ ${this._render_connections(t)}
 		});
 		return items;
 	}
-
+ 
 	// Persist the Items grid to the Task doctype via save_irpo_task_items.
 	// Driven by the viewer's Save button (the standalone "Save Items" button
 	// was removed), so it must NOT redraw the panel — the caller re-reads the
@@ -1700,28 +1820,28 @@ ${this._render_connections(t)}
 	async _persist_items() {
 		if (!this.$modal.find("#cc-items-table-body").length) return [];
 		if (!this._task_name) return [];
-
+ 
 		const items = this._collect_items_data();
 		// Nothing to write: the grid is empty and the task has no items either.
 		if (!items.length && !(this._task.items || []).length) return [];
-
+ 
 		const r = await frappe.call({
 			method: "cpc_construction_management.cpc_construction_management.doc_events.task.save_irpo_task_items",
 			args: { task_name: this._task_name, items_json: JSON.stringify(items) },
 		});
 		return r.message || [];
 	}
-
+ 
 	// ── Unplanned Items tab ────────────────────────────────────────────────
 	// Same structure and UI as the Items Details grid, but backed by the Task
 	// `custom_irpo_unplanned_item` child table ("IRPO Unplanned Item"). The only
 	// difference: no Amount column.
-
+ 
 	_render_unplanned_items(t) {
 		const rows = t.unplanned_items || [];
-
+ 
 		const rows_html = rows.map((r) => this._unplanned_row_html(r)).join("");
-
+ 
 		return `
 <h4 class="cc-viewer-section-title">${__("UNPLANNED ITEM DETAILS")}</h4>
 <span class="cc-items-dirty-badge hide" data-unplanned-dirty-indicator>${__("Unsaved changes")}</span>
@@ -1754,7 +1874,7 @@ ${this._render_connections(t)}
 	</div>
 </div>`;
 	}
-
+ 
 	// Build a single editable table row for the unplanned items grid. The DOM
 	// mirrors the planned grid so the shared row-control helpers can drive it.
 	_unplanned_row_html(r) {
@@ -1794,7 +1914,7 @@ ${this._render_connections(t)}
 	</td>
 </tr>`;
 	}
-
+ 
 	// Build Item / UOM Link controls for every row in the unplanned items table
 	// (reuses the shared row-control builder from the Items grid).
 	_unplanned_make_controls() {
@@ -1802,12 +1922,12 @@ ${this._render_connections(t)}
 			this._items_make_row_controls($(tr));
 		});
 	}
-
+ 
 	// Mark the unplanned items tab as having unsaved changes.
 	_unplanned_mark_dirty() {
 		this.$modal.find("[data-unplanned-dirty-indicator]").removeClass("hide");
 	}
-
+ 
 	// Append a blank editable row to the unplanned items table.
 	_unplanned_add_row() {
 		const blank = {
@@ -1825,7 +1945,7 @@ ${this._render_connections(t)}
 		const item_ctrl = this.$modal.find("#cc-unplanned-table-body tr:last-child").data("item-control");
 		if (item_ctrl) item_ctrl.$input.focus();
 	}
-
+ 
 	// Collect all rows from the editable unplanned items table.
 	_unplanned_collect_data() {
 		const rows = [];
@@ -1845,7 +1965,7 @@ ${this._render_connections(t)}
 		});
 		return rows;
 	}
-
+ 
 	// Persist the Unplanned Items grid to the Task doctype via
 	// save_irpo_task_unplanned_items. Driven by the viewer's Save button, so it
 	// must NOT redraw the panel — the caller re-reads the whole task and
@@ -1853,23 +1973,23 @@ ${this._render_connections(t)}
 	async _unplanned_persist() {
 		if (!this.$modal.find("#cc-unplanned-table-body").length) return [];
 		if (!this._task_name) return [];
-
+ 
 		const rows = this._unplanned_collect_data();
 		// Nothing to write: the grid is empty and the task has no unplanned rows either.
 		if (!rows.length && !(this._task.unplanned_items || []).length) return [];
-
+ 
 		const r = await frappe.call({
 			method: "cpc_construction_management.cpc_construction_management.doc_events.task.save_irpo_task_unplanned_items",
 			args: { task_name: this._task_name, items_json: JSON.stringify(rows) },
 		});
 		return r.message || [];
 	}
-
+ 
 	_render_budget(t) {
 		const budget_qty = t.cpc_budget_qty ? `${flt(t.cpc_budget_qty)} ${frappe.utils.escape_html(t.cpc_uom || "")}` : "—";
 		const total_budget = format_currency(flt(t.cpc_budget_amount), "SAR");
 		const consumed_pct = flt(t.progress || 0);
-
+ 
 		return `
 <div class="cc-viewer-stat-row">
 	<div class="cc-viewer-stat cc-viewer-stat-purple">
@@ -1881,7 +2001,7 @@ ${this._render_connections(t)}
 		<div class="cc-viewer-stat-value">${total_budget}</div>
 	</div>
 </div>
-
+ 
 <div class="cc-viewer-ledger-card">
 	<div class="cc-viewer-ledger-header">
 		<strong>${__("Weekly Progress")}</strong>
@@ -1892,72 +2012,127 @@ ${this._render_connections(t)}
 	</div>
 </div>`;
 	}
-
+ 
 	_render_progress(t) {
-		const entries = t.progress_history || [];
-		if (!entries.length) {
-			return `<p class="cc-viewer-empty">${__("No progress history entries found.")}</p>`;
+		const rp = this._reporting || {};
+		const recs = rp.progress_records || [];
+		const sm = rp.progress_summary || {};
+		const esc = (v) => (v == null || v === "" ? "—" : frappe.utils.escape_html(String(v)));
+		const pct = (v) => (v == null || v === "" ? "—" : `${+flt(v).toFixed(2)}%`);
+		const qty = (v) => (v == null || v === "" ? "—" : +flt(v).toFixed(3));
+		const dt = (d) => (d ? frappe.datetime.str_to_user(String(d).slice(0, 10)) : "—");
+		const badge_cls = {
+			"Approved": "cc-badge-green", "Pending Approval": "cc-badge-yellow",
+			"Returned": "cc-badge-blue", "Draft": "cc-badge-gray", "Cancelled": "cc-badge-gray",
+		};
+		const state_cls = { "On Hold": "cc-badge-yellow", "Completed": "cc-badge-green" };
+ 
+		const summary = `
+<h4 class="cc-viewer-section-title">${__("OFFICIAL PROGRESS")}</h4>
+<div class="cc-viewer-three-col" style="grid-template-columns: repeat(4, 1fr)">
+	<div class="cc-viewer-field"><label>${__("Approved Cumulative")}</label>
+		<div class="cc-viewer-value"><strong>${pct(sm.cum_percent)}</strong>
+		${sm.cum_completed_qty != null ? `<small class="text-muted"> (${qty(sm.cum_completed_qty)} ${__("of")} ${qty(sm.base_qty)})</small>` : ""}</div></div>
+	<div class="cc-viewer-field"><label>${__("Latest Approved Week")}</label>
+		<div class="cc-viewer-value">${esc(sm.calendar_week)}</div></div>
+	<div class="cc-viewer-field"><label>${__("Reporting State")}</label>
+		<div class="cc-viewer-value"><span class="cc-viewer-type-badge ${state_cls[sm.reporting_state] || "cc-badge-gray"}">${esc(sm.reporting_state)}</span></div></div>
+	<div class="cc-viewer-field"><label>${__("Awaiting Action")}</label>
+		<div class="cc-viewer-value">${flt(sm.pending_count)} ${__("pending")} · ${flt(sm.returned_count)} ${__("returned")}</div></div>
+</div>`;
+ 
+		if (!recs.length) {
+			return summary + `<p class="cc-viewer-empty">${__("No weekly progress records have been entered for this IRPO yet.")}</p>`;
 		}
-		const rows_html = entries.map((e) => {
-			const status_cls = e.docstatus === 1 ? "cc-badge-green" : "cc-badge-gray";
-			const status_label = e.docstatus === 1 ? __("Submitted") : __("Draft");
+ 
+		const rows = recs.map((r) => {
+			const state = r.docstatus === 2 ? "Cancelled" : (r.workflow_state || "Draft");
+			const notes = [];
+			if (r.return_reason) notes.push(`${__("Returned")}: ${frappe.utils.escape_html(r.return_reason)}`);
+			if (r.partial_hold_exception) {
+				notes.push(`${__("Hold exception")}${r.hold_exception_reason ? ": " + frappe.utils.escape_html(r.hold_exception_reason) : ""}${r.requires_hold_review ? " (" + __("review required") + ")" : ""}`);
+			}
+			if (r.no_change) notes.push(__("No change"));
+			const who = r.approved_by
+				? `${frappe.utils.escape_html(r.entered_by || "")}<br><small class="text-muted">${__("Approved")}: ${frappe.utils.escape_html(r.approved_by)} · ${dt(r.approved_on)}</small>`
+				: frappe.utils.escape_html(r.entered_by || "—");
 			return `
 <tr>
-	<td>${frappe.utils.escape_html(e.posting_date || "")}</td>
-	<td class="cc-viewer-pct-cell"><a href="#" data-open-voucher="${frappe.utils.escape_html(e.voucher_no || "")}">${flt(e.cumulative_pct, 1)}%</a></td>
-	<td>+${flt(e.period_pct, 1)}%</td>
-	<td><strong>${format_currency(flt(e.earned_value), "SAR")}</strong></td>
-	<td><span class="cc-viewer-type-badge ${status_cls}">${status_label}</span></td>
+	<td><a href="/app/irpo-progress/${encodeURIComponent(r.name)}" target="_blank"><strong>${esc(r.calendar_week)}</strong></a>
+		<br><small class="text-muted">${__("Exec. week")} ${esc(r.execution_week)} · ${dt(r.week_start_date)} – ${dt(r.week_ending)}</small></td>
+	<td style="white-space:nowrap">${dt(r.measurement_cutoff_date)}</td>
+	<td>+${pct(r.period_percent_same_base)}<br><small class="text-muted">+${qty(r.period_completed_qty_snapshot)}</small></td>
+	<td><strong>${pct(r.cum_percent)}</strong><br><small class="text-muted">${qty(r.cum_completed_qty)} / ${qty(r.base_qty_snapshot)}</small></td>
+	<td><span class="cc-viewer-type-badge ${badge_cls[state] || "cc-badge-gray"}">${__(state)}</span></td>
+	<td>${who}</td>
+	<td><small>${notes.join("<br>") || "—"}</small></td>
 </tr>`;
 		}).join("");
-
-		return `
-<h4 class="cc-viewer-section-title">${__("WEEKLY PROGRESS LOG HISTORY")}</h4>
-<div class="cc-viewer-table-wrap">
+ 
+		return summary + `
+<h4 class="cc-viewer-section-title" style="margin-top:8px">${__("WEEKLY PROGRESS LOG HISTORY")} <small class="text-muted" style="font-weight:400;text-transform:none">(${recs.length})</small></h4>
+<div class="cc-viewer-table-wrap cc-viewer-progress-scroll">
 	<table class="cc-viewer-table">
-		<thead>
-			<tr>
-				<th>${__("Posting Date")}</th>
-				<th>${__("Cumulative %")}</th>
-				<th>${__("This Period %")}</th>
-				<th>${__("Earned Period Value")}</th>
-				<th>${__("Status")}</th>
-			</tr>
-		</thead>
-		<tbody>${rows_html}</tbody>
+		<thead><tr>
+			<th>${__("Week")}</th><th>${__("Cutoff")}</th><th>${__("This Period")}</th>
+			<th>${__("Cumulative")}</th><th>${__("Status")}</th><th>${__("Entered / Approved By")}</th><th>${__("Remarks")}</th>
+		</tr></thead>
+		<tbody>${rows}</tbody>
 	</table>
 </div>`;
 	}
-
+ 
 	// ── Edit mode ───────────────────────────────────────────────────────────
-
-	// Show/hide the Items + Unplanned grids' editing affordances. The grid cells
-	// stay populated and readable at all times — only "Add Row" and the per-row
-	// delete controls appear once "Edit Document" is active, so the read-only
-	// view has no dangling actions that cannot be saved.
+ 
+	// Toggle the Items + Unplanned grids between read-only and editable. The grid
+	// cells stay populated and readable at all times; the inline inputs and Link
+	// controls only become editable, and the "Add Row" / per-row delete controls
+	// only appear, once "Edit Document" is active.
 	_set_items_editable(on) {
-		this.$modal
-			.find("[data-items-bottom-bar], [data-unplanned-bottom-bar], .cc-items-del-col")
+		const $m = this.$modal;
+		$m.find("[data-items-bottom-bar], [data-unplanned-bottom-bar], .cc-items-del-col")
 			.toggleClass("hide", !on);
+ 
+		// Numeric cells (QTY / Amount).
+		$m.find(".cc-items-table")
+			.toggleClass("cc-items-grid-readonly", !on)
+			.find(".cc-items-edit-input")
+			.prop("readonly", !on)
+			.prop("disabled", !on);
+ 
+		// Item / IRPO Item Type Link controls.
+		$m.find("#cc-items-table-body tr, #cc-unplanned-table-body tr").each((_, tr) => {
+			const $tr = $(tr);
+			["type-control", "item-control"].forEach((key) => {
+				const ctrl = $tr.data(key);
+				if (!ctrl) return;
+				if (ctrl.$input) {
+					ctrl.$input.prop("readonly", !on);
+				}
+				if (ctrl.$wrapper) {
+					ctrl.$wrapper.toggleClass("cc-items-control-locked", !on);
+				}
+			});
+		});
 	}
-
+ 
 	_enter_edit_mode() {
 		if (!this._task) return;
 		this._edit_mode = true;
 		const $m = this.$modal;
-
+ 
 		$m.find("[data-viewer-edit]").addClass("hide");
 		$m.find("[data-viewer-save], [data-viewer-cancel-edit]").removeClass("hide");
 		$m.find(".cc-viewer-footer").removeClass("hide");
 		this._set_items_editable(true);
-
+ 
 		// Replace each editable display div with an input
 		$m.find(".cc-viewer-editable[data-edit-field]").each((_, el) => {
 			const $el = $(el);
 			const field = $el.data("edit-field");
 			const type = $el.data("field-type") || "Data";
 			const val = this._task[field] || "";
-
+ 
 			let input_html;
 			if (type === "Date") {
 				input_html = `<input class="form-control cc-viewer-edit-input" data-edit-field="${field}" type="date" value="${val}" />`;
@@ -1982,7 +2157,7 @@ ${this._render_connections(t)}
 			$el.replaceWith(input_html);
 		});
 	}
-
+ 
 	_exit_edit_mode() {
 		const was_editing = this._edit_mode;
 		this._edit_mode = false;
@@ -1991,13 +2166,13 @@ ${this._render_connections(t)}
 		$m.find("[data-viewer-save], [data-viewer-cancel-edit]").addClass("hide");
 		$m.find(".cc-viewer-footer").addClass("hide");
 		this._set_items_editable(false);
-
+ 
 		// Only re-render the read-only state when leaving an active edit mode.
 		// Re-rendering unconditionally would loop forever with _render_all(),
 		// since _render_all() resets edit mode at the end of every render.
 		if (was_editing && this._task) this._render_all();
 	}
-
+ 
 	async _save() {
 		const $m = this.$modal;
 		const data = {};
@@ -2005,16 +2180,16 @@ ${this._render_connections(t)}
 			const $el = $(el);
 			data[$el.data("edit-field")] = $el.val();
 		});
-
+ 
 		const $btn = $m.find("[data-viewer-save]");
 		$btn.prop("disabled", true).text(__("Saving…"));
 		try {
 			// Items first — it rebuilds the custom_items_table child rows.
 			await this._persist_items();
-
+ 
 			// Unplanned Items — rebuilds the custom_irpo_unplanned_item child rows.
 			await this._unplanned_persist();
-
+ 
 			if (Object.keys(data).length) {
 				await frappe.call({
 					method: "cpc_construction_management.cpc_construction_management.doc_events.task.save_irpo_task_fields",
@@ -2039,7 +2214,7 @@ ${this._render_connections(t)}
 			$btn.prop("disabled", false).text(__("Save"));
 		}
 	}
-
+ 
 	// Save a color change immediately without requiring the user to enter edit mode.
 	// Called by the 'change' event on the color picker once the native picker is closed.
 	async _save_color(color) {
@@ -2063,7 +2238,7 @@ ${this._render_connections(t)}
 			frappe.show_alert({ message: this._save_error_message(err, __("Could not save color.")), indicator: "red" });
 		}
 	}
-
+ 
 	// Frappe already toasts the server-side reason for a failed save. Append it
 	// to the short alert so the dialog does not hide *why* nothing was written.
 	_save_error_message(err, fallback) {
@@ -2078,7 +2253,7 @@ ${this._render_connections(t)}
 		}
 		if (!text) text = (err && (err._error_message || err.message)) || "";
 		if (!text) return fallback;
-
+ 
 		const plain = $("<div>").html(String(text)).text().trim().split("\n")[0];
 		return plain ? `${fallback} ${plain}` : fallback;
 	}

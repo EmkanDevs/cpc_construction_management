@@ -178,6 +178,7 @@ doc_events = {
             "cpc_construction_management.cpc_construction_management.budget.irpo_budget_submitted.validate_irpo_budget_submitted",
             "cpc_construction_management.cpc_construction_management.budget.irpo_quantity_validation.check_quantity_budget",
             "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.warn_unplanned_budget",
+            "cpc_construction_management.cpc_construction_management.budget.irpo_unplanned.validate_direct_po_available",
         ],
         "before_validate": [
             "cpc_construction_management.cpc_construction_management.budget.irpo_budget.carry_forward_irpo_fields",

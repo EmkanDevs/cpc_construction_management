@@ -901,6 +901,9 @@ function show_irpo_dialog(frm, boq_lines) {
 				fieldtype: "Select",
 				options: boq_options,
 				reqd: 1,
+				description: __(
+					"Select the BOQ work item to break down into smaller operational IRPO tasks and budget allocations."
+				),
 				onchange: () => on_boq_code_change(),
 			},
 			{
@@ -1305,6 +1308,25 @@ function show_irpo_dialog(frm, boq_lines) {
 			max-width: 40px !important;
 			padding-left: 12px !important;
 			padding-right: 0 !important;
+		}
+		.modal.show [data-fieldname="boq_code"] .control-label {
+			font-weight: 700 !important;
+			font-size: 13px !important;
+			color: var(--text-color, #1f272e);
+			margin-bottom: 2px;
+		}
+		.modal.show [data-fieldname="boq_code"] .control-input-wrapper {
+			display: flex;
+			flex-direction: column;
+		}
+		.modal.show [data-fieldname="boq_code"] .help-box {
+			order: -1;
+			font-size: 12px;
+			color: var(--text-muted, #64748b);
+			margin-top: 1px;
+			margin-bottom: 6px;
+			line-height: 1.4;
+			display: block !important;
 		}
 	</style>`).appendTo(dialog.$wrapper);
 

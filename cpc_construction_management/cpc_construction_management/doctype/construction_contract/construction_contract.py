@@ -232,9 +232,35 @@ class ConstructionContract(Document):
 	# Validation / rollups
 	# ------------------------------------------------------------------
 	def validate(self):
+		self.validate_existing_project()
 		self.apply_item_classification_defaults()
 		self.calculate_boq_totals()
 		self.validate_unique_boq_codes()
+
+	def validate_existing_project(self):
+		if self.use_existing_project:
+			if not self.project:
+				frappe.throw(_("Please select an existing Project or uncheck 'Use Existing Project'."))
+
+			project_data = frappe.db.get_value(
+				"Project", self.project, ["company", "customer"], as_dict=True
+			)
+			if not project_data:
+				frappe.throw(_("Selected Project {0} does not exist.").format(frappe.bold(self.project)))
+			if self.company and project_data.company != self.company:
+				frappe.throw(
+					_("Selected Project {0} belongs to company {1}, but this contract is for {2}.").format(
+						frappe.bold(self.project), frappe.bold(project_data.company), frappe.bold(self.company)
+					)
+				)
+			if self.customer and project_data.customer != self.customer:
+				frappe.throw(
+					_("Selected Project {0} belongs to customer {1}, but this contract is for {2}.").format(
+						frappe.bold(self.project), frappe.bold(project_data.customer), frappe.bold(self.customer)
+					)
+				)
+		elif self.docstatus == 0 and not self.use_existing_project and self.project:
+			self.project = None
 
 	def apply_item_classification_defaults(self):
 		"""Fill item_group_l1/l2/l3/item_group on each BOQ row from Item Variant
@@ -338,6 +364,14 @@ class ConstructionContract(Document):
 		self.push_boq_to_item_master()
 		self.create_project()
 		self.sync_project_to_boq_items()
+		try:
+			from cpc_construction_management.cpc_construction_management.doc_events.task import (
+				create_boq_nodes_for_contract,
+			)
+			create_boq_nodes_for_contract(self.name)
+		except Exception as e:
+			frappe.log_error(f"Error creating BOQ nodes for {self.name}: {e}")
+
 
 	# ------------------------------------------------------------------
 	# US-02: push BOQ lines to Item Master
@@ -423,6 +457,8 @@ class ConstructionContract(Document):
 	# ------------------------------------------------------------------
 	def create_project(self):
 		if self.project:
+			if not frappe.db.get_value("Project", self.project, "cpc_source_contract"):
+				frappe.db.set_value("Project", self.project, "cpc_source_contract", self.name)
 			return  # idempotent — never create a second Project
 
 		project = frappe.new_doc("Project")

@@ -212,7 +212,7 @@
 
 .cpc-control-center .cc-table {
 	border-collapse: collapse;
-	min-width: 1050px;
+	min-width: 100%;
 	table-layout: fixed;
 	width: 100%;
 }
@@ -222,44 +222,50 @@
 	color: #000;
 	font-size: 12px;
 	font-weight: 700;
-	padding: 8px 10px;
+	padding: 8px 12px;
 	text-align: left;
 	white-space: nowrap;
 }
 
 .cpc-control-center .cc-table th:nth-child(1) {
-	width: 23%;
+	width: 17%;
 }
 
 .cpc-control-center .cc-table th:nth-child(2) {
-	width: 13%;
+	width: 14%;
 }
 
 .cpc-control-center .cc-table th:nth-child(3) {
-	width: 13%;
+	width: 9.5%;
 }
 
 .cpc-control-center .cc-table th:nth-child(4) {
-	width: 12%;
+	width: 11%;
 }
 
 .cpc-control-center .cc-table th:nth-child(5) {
-	width: 13%;
+	width: 13.5%;
 }
 
 .cpc-control-center .cc-table th:nth-child(6) {
-	width: 10%;
+	width: 9.5%;
+	white-space: normal;
+	line-height: 1.2;
 }
 
 .cpc-control-center .cc-table th:nth-child(7) {
-	width: 16%;
+	width: 7.5%;
+}
+
+.cpc-control-center .cc-table th:nth-child(8) {
+	width: 18%;
 }
 
 .cpc-control-center .cc-table td {
 	border-top: 1px solid var(--cc-line);
 	font-size: 13px;
 	height: 43px;
-	padding: 7px 10px;
+	padding: 7px 12px;
 	vertical-align: middle;
 }
 
@@ -269,6 +275,75 @@
 
 .cpc-control-center .cc-child-row {
 	background: #fbfcfd;
+}
+
+.cpc-control-center .cc-child-row td:first-child {
+	display: table-cell;
+}
+
+.cpc-control-center .cc-child-row td:first-child > span.cc-child-indent {
+	vertical-align: middle;
+}
+
+.cpc-control-center .cc-child-row td:first-child > span.cc-so-name {
+	display: inline-block;
+	vertical-align: middle;
+	padding-left: 8px;
+}
+
+.cpc-control-center .cc-table td:first-child .cc-text-link {
+	color: var(--link-color, #2490ef);
+	cursor: pointer;
+	text-decoration: none;
+	display: inline-block;
+	text-align: left;
+	padding: 0;
+	background: transparent;
+	border: 0;
+}
+
+.cpc-control-center .cc-table td:first-child .cc-text-link:hover,
+.cpc-control-center .cc-table td:first-child .cc-text-link:focus {
+	color: var(--link-hover-color, #1d8ce0);
+	text-decoration: underline;
+}
+
+.cpc-control-center .cc-table td:first-child .cc-text-link strong {
+	color: inherit;
+	cursor: pointer;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) > button.cc-text-link,
+.cpc-control-center .cc-table td:nth-child(5) > span {
+	display: inline-block;
+	vertical-align: middle;
+	text-align: left;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) .cc-text-link {
+	color: var(--link-color, #2490ef);
+	padding: 0;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) .cc-text-link:hover {
+	color: var(--link-hover-color, #1d8ce0);
+	text-decoration: underline;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) .cc-text-link span {
+	display: inline-block;
+	vertical-align: middle;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) .cc-text-link strong {
+	display: block;
+	color: inherit;
+}
+
+.cpc-control-center .cc-table td:nth-child(5) .cc-text-link small {
+	display: block;
+	color: var(--text-muted);
+	font-size: 12px;
 }
 
 .cpc-control-center .cc-child-row:hover,
@@ -323,7 +398,7 @@
 
 .cpc-control-center .cc-child-indent {
 	display: inline-block;
-	width: 20px;
+	width: 40px;
 }
 
 .cpc-control-center .cc-number {
@@ -331,21 +406,32 @@
 	white-space: nowrap;
 }
 
+.cpc-control-center .cc-value {
+	text-align: left !important;
+	white-space: nowrap;
+}
+
 .cpc-control-center .cc-actions {
 	display: table-cell;
-	text-align: right;
+	text-align: left;
 	white-space: nowrap;
 }
 
 .cpc-control-center .cc-actions-heading {
-	text-align: right !important;
+	text-align: left !important;
 }
 
-.cpc-control-center .cc-actions .btn {
+.cpc-control-center .cc-actions .btn,
+.cpc-control-center .cc-summary-btn {
+	align-items: center;
+	display: inline-flex;
 	font-size: 11px;
 	height: 23px;
-	line-height: 20px;
+	justify-content: center;
+	line-height: 1;
 	padding: 0 7px;
+	text-align: center;
+	vertical-align: middle;
 }
 
 .cpc-control-center .cc-actions .btn + .btn {
@@ -598,27 +684,38 @@ body.cc-modal-open .modal {
 	padding: 16px 18px;
 }
 
-/* Add Contract: grow the dialog with its BOQ rows instead of giving the
-   table its own scrollbar. The overlay scrolls (top-aligned, so a taller
-   dialog scrolls cleanly from the header); the card/body do not. */
-.cpc-control-center #cc-contract-modal {
+/* Add Contract and Add Sales Order: grow the dialog with its rows instead
+   of giving the table its own scrollbar. The overlay scrolls (top-aligned, so
+   a taller dialog scrolls cleanly from the header); the card/body do not clip autocompletes. */
+.cpc-control-center #cc-contract-modal,
+.cpc-control-center #cc-sales-order-modal {
 	align-items: flex-start;
 	overflow-y: auto;
 }
 
-.cpc-control-center #cc-contract-modal .cc-modal-card {
+.cpc-control-center #cc-contract-modal .cc-modal-card,
+.cpc-control-center #cc-sales-order-modal .cc-modal-card {
 	margin: auto;
 	max-height: none;
 	overflow: visible;
 }
 
-.cpc-control-center #cc-contract-modal .cc-modal-body {
+.cpc-control-center #cc-contract-modal .cc-modal-body,
+.cpc-control-center #cc-sales-order-modal .cc-modal-body {
 	flex: 0 0 auto;
 	overflow-y: visible;
+	position: relative;
+	z-index: 5;
 }
 
-.cpc-control-center #cc-contract-modal .cc-dialog-table-wrap {
-	/* visible (both axes) so the floating UOM autocomplete is never clipped;
+.cpc-control-center #cc-sales-order-modal .cc-modal-footer {
+	position: relative;
+	z-index: 1;
+}
+
+.cpc-control-center #cc-contract-modal .cc-dialog-table-wrap,
+.cpc-control-center #cc-sales-order-modal .cc-dialog-table-wrap {
+	/* visible (both axes) so the floating autocomplete is never clipped;
 	   the fixed-layout table fits the card width, so no horizontal scroll is needed */
 	overflow: visible;
 }
@@ -673,6 +770,29 @@ body.cc-modal-open .modal {
 	color: #39424e;
 	font-size: 12px;
 	font-weight: 600;
+}
+
+.cpc-control-center .cc-contract-checkbox-label {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 0 2px 0;
+	cursor: pointer;
+}
+
+.cpc-control-center .cc-contract-checkbox-label input[type="checkbox"] {
+	margin: 0;
+	width: 15px;
+	height: 15px;
+	cursor: pointer;
+}
+
+.cpc-control-center .cc-contract-checkbox-label > span {
+	font-size: 12px;
+	font-weight: 600;
+	color: #39424e;
+	cursor: pointer;
 }
 
 .cpc-control-center .cc-contract-form-card b {
@@ -906,6 +1026,106 @@ body.cc-modal-open .modal {
 
 .cpc-control-center .cc-dialog-table td [data-boq-uom-field] .awesomplete > [role="listbox"] > li:hover,
 .cpc-control-center .cc-dialog-table td [data-boq-uom-field] .awesomplete > [role="listbox"] > li[aria-selected="true"] {
+	background-color: var(--cc-blue);
+	color: #fff;
+}
+
+/* Sales Order item rows: the Item cell hosts a Link control that should look
+   like the plain inline inputs next to it. */
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .frappe-control {
+	padding: 0;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .form-group {
+	margin: 0;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .control-label,
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .help-box {
+	display: none;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .input-with-feedback {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	font-size: 12px;
+	height: 31px;
+	padding: 5px 0;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .link-field {
+	height: 31px;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete {
+	min-width: 0;
+	width: 100%;
+}
+
+.cpc-control-center .cc-add-so-row-wrap {
+	display: flex;
+	justify-content: flex-start;
+	padding-top: 10px;
+}
+
+.cpc-control-center .cc-add-so-row-wrap:has([data-add-so-item].hide) {
+	display: none;
+}
+
+.cpc-control-center #cc-sales-order-modal .cc-dialog-table tbody tr:focus-within {
+	position: relative;
+	z-index: 20;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"],
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul {
+	background: var(--fg-color);
+	border: 1px solid var(--cc-line);
+	border-radius: 6px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+	left: 0;
+	list-style: none;
+	margin: 4px 0 0;
+	max-height: min(40vh, 220px);
+	min-width: 280px;
+	overflow-y: auto;
+	padding: 4px;
+	position: absolute;
+	top: 100%;
+	width: max-content;
+	max-width: 480px;
+	z-index: 1050;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"][hidden],
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul[hidden] {
+	display: none;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"] > li,
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul > li {
+	border: 0;
+	border-bottom: 1px solid var(--cc-line);
+	border-radius: 0;
+	cursor: pointer;
+	display: block;
+	margin: 0;
+	overflow: hidden;
+	padding: 9px 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"] > li:last-child,
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul > li:last-child {
+	border-bottom: 0;
+}
+
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"] > li:hover,
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > [role="listbox"] > li[aria-selected="true"],
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul > li:hover,
+.cpc-control-center .cc-dialog-table td [data-so-item-field] .awesomplete > ul > li[aria-selected="true"] {
 	background-color: var(--cc-blue);
 	color: #fff;
 }
@@ -1370,8 +1590,9 @@ body.cc-modal-open .modal {
 }
 
 .planner-subtitle {
-	color: #64748b;
-	font-size: .78rem;
+	color: #000;
+	font-size: .8rem;
+	font-weight: 600;
 	margin: 2px 0 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1486,7 +1707,7 @@ body.cc-modal-open .modal {
 .planner-wbs-panel {
 	border-right: 2px solid #e2e8f0;
 	display: flex;
-	flex: 0 0 55%;
+	flex: 0 0 clamp(1125px, 63%, 1240px);
 	flex-direction: column;
 	min-width: 0;
 	overflow: hidden;
@@ -1500,76 +1721,93 @@ body.cc-modal-open .modal {
 .planner-wbs-table {
 	border-collapse: separate;
 	border-spacing: 0;
-	font-size: .82rem;
-	min-width: 1170px;
+	font-size: .80rem;
+	min-width: 1125px;
 	table-layout: fixed;
 	width: 100%;
 }
 
 .planner-wbs-table .planner-col-main {
-	width: 260px;
+	width: 215px;
 }
 
 .planner-wbs-table .planner-col-uom {
-	width: 72px;
+	width: 46px;
 }
 
 .planner-wbs-table .planner-col-qty {
-	width: 64px;
+	width: 44px;
 }
 
 .planner-wbs-table .planner-col-budget {
-	width: 120px;
+	width: 125px;
 }
 
 .planner-wbs-table .planner-col-pending {
-	width: 130px;
+	width: 125px;
 }
 
 .planner-wbs-table .planner-col-consumed {
-	width: 190px;
+	width: 185px;
 }
 
 .planner-wbs-table .planner-col-progress {
-	width: 140px;
+	width: 95px;
 }
 
 .planner-wbs-table .planner-col-weekly {
-	width: 130px;
+	width: 75px;
+}
+
+.planner-wbs-table .planner-col-status {
+	width: 95px;
 }
 
 .planner-wbs-table .planner-col-actions {
-	width: 64px;
+	width: 120px;
+}
+
+.planner-wbs-table thead tr,
+.planner-timeline-table thead tr {
+	height: 44px;
 }
 
 .planner-wbs-table th {
 	background: #f1f5f9;
 	border-bottom: 2px solid #cbd5e1;
+	box-sizing: border-box;
 	color: #475569;
-	font-size: .72rem;
+	font-size: .68rem;
 	font-weight: 600;
-	letter-spacing: .04em;
-	line-height: 17px;
-	padding: 8px 10px;
+	height: 44px;
+	letter-spacing: .03em;
+	line-height: 13px;
+	padding: 4px 6px;
 	position: sticky;
 	text-transform: uppercase;
 	top: 0;
-	white-space: nowrap;
+	vertical-align: middle;
+	white-space: normal;
 	z-index: 1;
 }
 
 .planner-wbs-table td {
 	border-bottom: 1px solid #e2e8f0;
-	padding: 7px 10px;
+	box-sizing: border-box;
+	padding: 5px 6px;
 	vertical-align: middle;
 }
 
 .planner-wbs-th-main {
-	min-width: 220px;
+	min-width: 215px;
 }
 
 .planner-num {
 	text-align: right;
+}
+
+.planner-center {
+	text-align: center;
 }
 
 /* Group rows */
@@ -1651,13 +1889,13 @@ body.cc-modal-open .modal {
 
 /* Consumed column */
 .planner-consumed {
-	min-width: 150px;
+	min-width: 185px;
 }
 
 .planner-consumed-cell {
 	align-items: center;
 	display: flex;
-	gap: 6px;
+	gap: 4px;
 	justify-content: flex-end;
 	white-space: nowrap;
 }
@@ -1667,10 +1905,10 @@ body.cc-modal-open .modal {
 	border: 1px solid #a4e0c5;
 	border-radius: 999px;
 	color: #166534;
-	font-size: .68rem;
+	font-size: .66rem;
 	font-weight: 600;
-	line-height: 1.5;
-	padding: 1px 8px;
+	line-height: 1.4;
+	padding: 1px 6px;
 	white-space: nowrap;
 }
 
@@ -1682,14 +1920,14 @@ body.cc-modal-open .modal {
 
 /* Progress column */
 .planner-progress {
-	min-width: 120px;
+	min-width: 80px;
 	white-space: nowrap;
 }
 
 .planner-progress-cell {
 	align-items: center;
 	display: inline-flex;
-	gap: 6px;
+	gap: 4px;
 }
 
 /* Progress bar */
@@ -1698,7 +1936,7 @@ body.cc-modal-open .modal {
 	border-radius: 4px;
 	height: 6px;
 	overflow: hidden;
-	width: 80px;
+	width: 50px;
 }
 
 .planner-progress-bar {
@@ -1711,8 +1949,8 @@ body.cc-modal-open .modal {
 
 .planner-pct-label {
 	color: #64748b;
-	font-size: .72rem;
-	margin-left: 6px;
+	font-size: .70rem;
+	margin-left: 4px;
 }
 
 /* Actions column */
@@ -1776,20 +2014,23 @@ body.cc-modal-open .modal {
 	width: 100%;
 }
 
-/* Date header cells — match the height of the WBS header (Actions) row */
+/* Date header cells — match the height of the WBS header row */
 .planner-date-cell {
 	background: #f1f5f9;
 	border-bottom: 2px solid #cbd5e1;
 	border-right: 1px solid #e2e8f0;
+	box-sizing: border-box;
 	color: #64748b;
 	font-size: .68rem;
 	font-weight: 600;
-	line-height: 17px;
+	height: 44px;
+	line-height: 13px;
 	min-width: 48px;
-	padding: 8px 2px;
+	padding: 4px 2px;
 	position: sticky;
 	text-align: center;
 	top: 0;
+	vertical-align: middle;
 	white-space: nowrap;
 	width: 48px;
 	z-index: 1;
@@ -2985,6 +3226,42 @@ box-shadow: 0 0 0 2px rgba(36, 144, 239, 0.15);
 text-align: right;
 }
 
+/* Read-only grid: inline inputs and Link controls look like plain text and are
+   not interactive until "Edit Document" is clicked. */
+.cc-items-table.cc-items-grid-readonly .cc-items-edit-input,
+.cc-items-table.cc-items-grid-readonly .cc-items-edit-input:disabled,
+.cc-items-table.cc-items-grid-readonly .cc-items-cell-control .form-control,
+.cc-items-table.cc-items-grid-readonly .cc-items-cell-control input {
+	border-color: transparent;
+	background: transparent;
+	color: var(--text-color);
+	-webkit-text-fill-color: var(--text-color);
+	opacity: 1;
+	padding-left: 0;
+	padding-right: 0;
+	box-shadow: none;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.cc-items-table.cc-items-grid-readonly .cc-items-edit-input::-webkit-outer-spin-button,
+.cc-items-table.cc-items-grid-readonly .cc-items-edit-input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* Lock the Item / IRPO Item Type Link controls (no clicks, no dropdowns).
+   Note: do NOT hide `.awesomplete` — Awesomplete wraps the input itself in
+   `<div class="awesomplete">`, so hiding it would hide the field value. */
+.cc-items-control-locked {
+	pointer-events: none;
+}
+
+.cc-items-control-locked .btn-clear,
+.cc-items-control-locked .link-btn {
+	display: none !important;
+}
+
 /* Read-only UOM cell: mirrors the Item's stock UOM, not editable */
 .cc-items-uom-value,
 .cc-items-name-value {
@@ -3074,3 +3351,73 @@ margin-top: 2px;
 .cpc-control-center .cc-approval-summary ul { margin: 0; padding-left: 18px; }
 .cpc-control-center .cc-approval-summary li { margin-bottom: 4px; }
 .cpc-control-center button.is-disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── IRPO status pills, Hold / Resume actions, legend ───────────────── */
+.planner-status-pill {
+	align-items: center;
+	border-radius: 999px;
+	display: inline-flex;
+	font-size: .7rem;
+	font-weight: 600;
+	gap: 4px;
+	line-height: 1;
+	padding: 5px 10px;
+	white-space: nowrap;
+}
+.planner-status-ico { font-size: .62rem; }
+.planner-status-pill--inprogress { background: #dcfce7; color: #166534; }
+.planner-status-pill--hold       { background: #fef3c7; color: #92400e; }
+.planner-status-pill--open       { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+.planner-status-pill--done       { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+
+.planner-hold-btn {
+	align-items: center;
+	background: #fff;
+	border: 1px solid #6d5acd;
+	border-radius: 6px;
+	color: #4c3fb0;
+	cursor: pointer;
+	display: inline-flex;
+	font-size: .7rem;
+	font-weight: 600;
+	gap: 4px;
+	margin-right: 4px;
+	padding: 4px 9px;
+}
+.planner-hold-btn:hover { background: #f3f0ff; }
+.planner-hold-btn--resume { background: #16a34a; border-color: #16a34a; color: #fff; }
+.planner-hold-btn--resume:hover { background: #15803d; }
+
+/* Held IRPO: highlight the WBS row and render the Gantt bar in amber/dashed */
+.planner-leaf-row:has(.planner-hold-btn--resume) td { background: #fffbeb; }
+.planner-bar-div.planner-bar-div--hold {
+	background: #fde68a !important;
+	border: 1px dashed #d97706;
+	box-shadow: none !important;
+}
+.planner-bar-div--hold .planner-bar-label { color: #78350f; text-shadow: none; }
+
+.planner-wbs-table .planner-actions { white-space: nowrap; }
+.planner-wbs-table .planner-num { white-space: nowrap; }
+
+/* Keep currency values inside their own cell (no bleed into the next column) */
+.planner-wbs-table td.planner-num,
+.planner-wbs-table td.planner-consumed { overflow: hidden; padding-left: 8px; padding-right: 10px; text-overflow: clip; }
+
+/* Progress & History: long logs scroll inside the table, header stays visible */
+.cpc-control-center #cc-irpo-viewer-modal .cc-viewer-progress-scroll {
+	max-height: 340px;
+	overflow: auto;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+}
+.cc-viewer-progress-scroll .cc-viewer-table thead th {
+	background: var(--card-bg, #fff);
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	box-shadow: 0 1px 0 var(--border-color);
+}
+
+/* Consumed cell holds amount + % pill: never clip it, keep them on one line */
+.planner-wbs-table td.planner-consumed { overflow: visible; white-space: nowrap; }

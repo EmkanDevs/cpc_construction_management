@@ -3512,6 +3512,9 @@ def get_planner_data(cpc_contract=None, project=None, sales_order=None):
             if so_contract:
                 contract = so_contract
         filters["cpc_contract"] = contract
+        if frappe.db.get_value("Construction Contract", contract, "docstatus") == 1:
+            if not frappe.db.exists("Task", {"cpc_contract": contract, "cpc_node_type": "BOQ Node"}):
+                create_boq_nodes_for_contract(contract)
     elif sales_order:
         so_contract = frappe.get_value("Sales Order", sales_order, "cpc_contract")
         if so_contract:

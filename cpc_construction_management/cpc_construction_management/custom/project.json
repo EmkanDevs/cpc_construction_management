@@ -2787,26 +2787,6 @@
    "table_fieldname": null
   },
   {
-   "creation": "2025-09-08 14:17:42.580239",
-   "custom": 1,
-   "docstatus": 0,
-   "group": "Extra",
-   "hidden": 0,
-   "idx": 2,
-   "is_child_table": 0,
-   "link_doctype": "Daily Construction Report",
-   "link_fieldname": "project",
-   "modified": "2026-08-25 12:36:17.618917",
-   "modified_by": "Administrator",
-   "name": "kb1com4tdb",
-   "owner": "Administrator",
-   "parent": "Project",
-   "parent_doctype": null,
-   "parentfield": "links",
-   "parenttype": "Customize Form",
-   "table_fieldname": null
-  },
-  {
    "creation": "2026-08-25 12:36:17.649133",
    "custom": 1,
    "docstatus": 0,

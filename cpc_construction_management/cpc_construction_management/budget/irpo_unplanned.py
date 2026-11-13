@@ -1,15 +1,24 @@
-# """IRPO Unplanned Item tracking (spec dated 05-Oct-2026).
+
+# """IRPO Unplanned Item tracking (spec dated 05-Oct-2026) + 21-Oct-2026 enhancement.
 
 # Planned lines keep the existing irpo_budget_row_ref engine untouched. This module
 # only handles lines carrying cpc_irpo_unplanned_row_ref and re-uses the SAME
 # IRPO Quantity Ledger (rows flagged is_unplanned = 1).
 
 # Package: cpc_construction_management.cpc_construction_management.budget.irpo_unplanned
+
+# Everything new in the 21-Oct enhancement is marked  # [CHG-n]  so `git diff` is easy to review:
+#   CHG-1 validate_unplanned_rows : block decrease, collect revisions for the ledger/Activity
+#   CHG-2 post_unplanned          : Direct MR (or excess over source) raises the row QTY; snapshots
+#   CHG-3 reverse_unplanned       : cancel lowers QTY back, stamps reversal rows (+ event type)
+#   CHG-4 validate_task_mr_available (new, MR before_submit)
+#   CHG-5 log_unplanned_revisions    (new, Task on_update)
+#   CHG-6 make_material_request_from_unplanned : Task-based MR uses Available only
 # """
 # import frappe
 # from frappe import _
 # from frappe.model.naming import make_autoname
-# from frappe.utils import add_days, flt, fmt_money, nowdate
+# from frappe.utils import add_days, cint, flt, fmt_money, nowdate
 
 # from cpc_construction_management.cpc_construction_management.budget.irpo_budget import (
 #     _IRPO_FIELDNAME, get_actual_amount, get_committed_amount, validate_irpo_is_usable,
@@ -18,6 +27,10 @@
 #     CREATED_FROM, EVENT, STAGE, SUMMARY_FIELD,
 #     available_qty, is_unplanned_only, plan_stage_rows, source_stage_for, summary_from_balances,
 # )
+# # [CHG-0] new pure rules module
+# from cpc_construction_management.cpc_construction_management.budget.irpo_unplanned_rules import (
+#     TOL, UnplannedQtyError, check_consumption, check_qty_edit, fresh_qty, lowered_total,
+# )
 
 # UNPLANNED_DT = "IRPO Unplanned Item"
 # UNPLANNED_FIELD = "custom_irpo_unplanned_item"
@@ -25,6 +38,13 @@
 # PLANNED_FIELD = "custom_items_table"
 # LEDGER = "IRPO Quantity Ledger"
 # REF_SERIES = "IRPO-UPL-.#####"
+
+# # [CHG-0] ledger vocabulary + switch for the open business question
+# EV_ADDED_MR = "Unplanned Qty Added - MR"
+# EV_REVISION = "Unplanned Qty Revision - Task"
+# # Spec is silent on cancelling a Direct MR. True  = the quantity that MR introduced is withdrawn
+# # (QTY goes back down). False = it stays on the row and becomes Available (old behaviour).
+# LOWER_TOTAL_ON_CANCEL = True
 
 # ITEM_DT = {
 #     "Material Request": "Material Request Item",
@@ -77,12 +97,51 @@
 #     return flt(val[0][0])
 
 
+# def _balances(ref):  # [CHG-0]
+#     return dict(frappe.db.sql(
+#         "select stage, sum(qty) from `tabIRPO Quantity Ledger` where irpo_unplanned_row_ref=%s group by stage", ref))
+
+
+# _STATE_FIELDS = ["name", "parent", "item", "item_name", "uom", "qty", "irpo_available_qty",
+#                  "irpo_mr_pending_qty", "irpo_po_pending_qty", "irpo_pr_qty", "irpo_pi_actual_qty"]
+
+
+# def _state(ref):  # [CHG-0]
+#     return frappe.db.get_value(UNPLANNED_DT, {"unplanned_row_ref": ref}, _STATE_FIELDS, as_dict=True)
+
+
+# def _task_comment(task, html):  # [CHG-0]
+#     frappe.get_doc({
+#         "doctype": "Comment", "comment_type": "Info",
+#         "reference_doctype": "Task", "reference_name": task, "content": html,
+#     }).insert(ignore_permissions=True)
+
+
+# def _stamp_snapshots(names, ref, qty_before, avail_before, extra=None, fix_event=False):  # [CHG-0]
+#     """After-event snapshot of the Task row onto ledger rows (rows are insert-only, so this
+#     is written straight after the insert, in the same transaction)."""
+#     st = _state(ref)
+#     base = {
+#         "unplanned_qty_before": qty_before, "unplanned_qty_after": flt(st.qty),
+#         "mr_pending_qty_after": flt(st.irpo_mr_pending_qty), "po_pending_qty_after": flt(st.irpo_po_pending_qty),
+#         "pr_qty_after": flt(st.irpo_pr_qty), "pi_actual_qty_after": flt(st.irpo_pi_actual_qty),
+#         "irpo_available_qty_before": avail_before, "irpo_available_qty": flt(st.irpo_available_qty),
+#         "snapshot_captured": 1,
+#     }
+#     for n in names:
+#         vals = dict(base, **((extra or {}).get(n) or {}))
+#         if fix_event and not frappe.db.get_value(LEDGER, n, "event_type"):
+#             vals["event_type"] = "Cancel"  # planned mr_on_cancel leaves this blank for unplanned rows
+#         frappe.db.set_value(LEDGER, n, vals, update_modified=False)
+
+
 # # --------------------------------------------------------------------------
 # # Task: unplanned table validation   (Task.validate)
 # # --------------------------------------------------------------------------
 # def validate_unplanned_rows(doc, method=None):
 #     rows = doc.get(UNPLANNED_FIELD) or []
 #     seen = set()
+#     revisions = []  # [CHG-1]
 #     for r in rows:
 #         if not r.item:
 #             continue
@@ -91,11 +150,26 @@
 #         seen.add(r.item)
 
 #         existing = r.name and frappe.db.get_value(
-#             UNPLANNED_DT, r.name, ["item", "unplanned_row_ref", "uom", "irpo_mr_pending_qty", "irpo_po_pending_qty", "irpo_pr_qty", "irpo_pi_actual_qty"], as_dict=True
+#             UNPLANNED_DT, r.name,
+#             ["item", "unplanned_row_ref", "uom", "qty", "irpo_available_qty", "irpo_mr_pending_qty",
+#              "irpo_po_pending_qty", "irpo_pr_qty", "irpo_pi_actual_qty"], as_dict=True  # [CHG-1] + qty, available
 #         )
 #         if existing:
 #             if existing.item != r.item:
 #                 frappe.throw(_("Row {0}: Item cannot be changed once the row exists. Add a new row instead.").format(r.idx))
+#             # [CHG-1] QTY is increase-only; compare with the DB value, not the posted form
+#             controlled = sum(flt(existing[f]) for f in SUMMARY_FIELD.values())
+#             try:
+#                 diff = check_qty_edit(existing.qty, r.get("qty"), controlled)
+#             except UnplannedQtyError as e:
+#                 frappe.throw(_("Row {0}: {1}").format(r.idx, str(e)))
+#             if diff > TOL:
+#                 revisions.append({
+#                     "row_name": r.name, "ref": existing.unplanned_row_ref, "item": r.item,
+#                     "item_name": r.get("item_name") or frappe.db.get_value("Item", r.item, "item_name"),
+#                     "uom": existing.uom, "old": flt(existing.qty), "new": flt(r.get("qty")),
+#                     "diff": diff, "avail_before": flt(existing.irpo_available_qty),
+#                 })
 #             # system-owned fields: never trust values posted back from a stale form
 #             r.update({k: existing[k] for k in ("unplanned_row_ref", "uom", "irpo_mr_pending_qty", "irpo_po_pending_qty", "irpo_pr_qty", "irpo_pi_actual_qty")})
 #         else:
@@ -114,6 +188,36 @@
 #         for old in before.get(UNPLANNED_FIELD) or []:
 #             if old.name not in kept and frappe.db.exists(LEDGER, {"irpo_unplanned_row_ref": old.unplanned_row_ref}):
 #                 frappe.throw(_("Unplanned row for {0} has ledger history and cannot be removed.").format(old.item))
+#     doc.flags.irpo_upl_revisions = revisions  # [CHG-1] picked up by log_unplanned_revisions (on_update)
+
+
+# def log_unplanned_revisions(doc, method=None):  # [CHG-5]  Task.on_update
+#     """One ledger row + one Activity comment per QTY increase. The flag is popped, so a
+#     repeated hook in the same save cannot duplicate the entry."""
+#     revisions = doc.flags.pop("irpo_upl_revisions", None) or []
+#     if not revisions:
+#         return
+#     project, boq_code, company = frappe.db.get_value("Task", doc.name, ["project", "cpc_boq_code", "company"])
+#     for rv in revisions:
+#         st = _state(rv["ref"])
+#         rev_no = frappe.db.count(LEDGER, {"irpo_unplanned_row_ref": rv["ref"], "event_type": EV_REVISION}) + 1
+#         led = _insert_ledger({
+#             "doctype": LEDGER, "irpo": doc.name, "project": project, "boq_code": boq_code, "company": company,
+#             "posting_date": nowdate(), "item": rv["item"], "item_name": rv["item_name"],
+#             "stage": "IRPO Available", "created_from_stage": "Manual Adjustment", "event_type": EV_REVISION,
+#             "revision_no": rev_no, "voucher_type": "Task", "voucher_no": doc.name, "voucher_detail_no": rv["row_name"],
+#             "qty": rv["diff"], "uom": rv["uom"], "transaction_qty": rv["diff"], "transaction_uom": rv["uom"],
+#             "conversion_factor": 1, "is_unplanned": 1, "irpo_unplanned_row_ref": rv["ref"],
+#             "remarks": _("Unplanned Qty revised from {0} to {1} {2}").format(rv["old"], rv["new"], rv["uom"]),
+#         })
+#         _stamp_snapshots([led.name], rv["ref"], rv["old"], rv["avail_before"])
+#         _task_comment(doc.name, (
+#             "<b>Unplanned Item Qty Revised</b><br>Item: {item} - {name}<br>Unplanned Row Ref: {ref}<br>"
+#             "Source: Task ({task})<br>Total Qty: {old:g} &rarr; {new:g} {uom}<br>Change: +{diff:g} {uom}<br>"
+#             "IRPO Available Qty: {ab:g} &rarr; {aa:g} {uom}<br>Updated By: {user}").format(
+#                 item=rv["item"], name=rv["item_name"], ref=rv["ref"], task=doc.name, old=rv["old"],
+#                 new=rv["new"], uom=rv["uom"], diff=rv["diff"], ab=rv["avail_before"],
+#                 aa=flt(st.irpo_available_qty), user=frappe.session.user))
 
 
 # # --------------------------------------------------------------------------
@@ -285,6 +389,8 @@
 
 
 # def post_unplanned(doc, method=None):
+#     # [CHG-2] a Task-based MR draws from Available; every other MR is a Direct MR
+#     is_task_mr = doc.doctype == "Material Request" and cint(doc.get("is_created_from_task"))
 #     for row in _unplanned_lines(doc):
 #         ref = row.cpc_irpo_unplanned_row_ref
 #         _lock_ref(ref)
@@ -298,9 +404,38 @@
 #         _src, has_mr, has_po, has_pr = _source_info(doc, row)
 #         src_stage = source_stage_for(doc.doctype, has_mr, has_po, has_pr)
 #         balance = _stage_balance(ref, src_stage) if src_stage else 0
+
+#         # [CHG-2] new quantity (Direct MR, or the part of a PO/PR/PI larger than its source) raises QTY
+#         before = _state(ref)
+#         qty_before, avail_before = flt(before.qty), flt(before.irpo_available_qty)
+#         added = 0.0 if is_task_mr else fresh_qty(_row_qty(row), src_stage, balance)
+#         if added > TOL:
+#             frappe.db.set_value(UNPLANNED_DT, before.name, "qty", qty_before + added, update_modified=False)
+#         direct_mr = doc.doctype == "Material Request" and added > TOL
+#         event = EV_ADDED_MR if direct_mr else EVENT[doc.doctype]
+
+#         names, dest = [], None
 #         for stage, signed in plan_stage_rows(STAGE[doc.doctype], src_stage, _row_qty(row), balance):
-#             _insert_ledger(_ledger_values(doc, row, info, stage, signed, EVENT[doc.doctype]))
+#             led = _insert_ledger(_ledger_values(doc, row, info, stage, signed, event))
+#             names.append(led.name)
+#             if signed > 0:
+#                 dest = led.name
 #         refresh_unplanned_row_summary(ref)
+
+#         # [CHG-2] snapshot + record how much this row added to QTY (needed to undo it on cancel)
+#         extra = {dest: {"unplanned_qty_added": added}} if dest and added > TOL else None
+#         _stamp_snapshots(names, ref, qty_before, avail_before, extra)
+#         if direct_mr:
+#             after = _state(ref)
+#             _task_comment(before.parent, (
+#                 "<b>Unplanned Item Qty Added</b><br>Item: {item} - {name}<br>Unplanned Row Ref: {ref}<br>"
+#                 "Source: Material Request<br>Voucher: {mr}<br>Qty Added: +{q:g} {uom}<br>"
+#                 "Total Unplanned Qty: {tb:g} &rarr; {ta:g}<br>MR Pending Qty: {mb:g} &rarr; {ma:g}<br>"
+#                 "IRPO Available Qty: {ab:g} &rarr; {aa:g}<br>By: {user}").format(
+#                     item=row.item_code, name=info.item_name, ref=ref, mr=doc.name, q=added, uom=info.uom,
+#                     tb=qty_before, ta=flt(after.qty), mb=flt(before.irpo_mr_pending_qty),
+#                     ma=flt(after.irpo_mr_pending_qty), ab=avail_before, aa=flt(after.irpo_available_qty),
+#                     user=frappe.session.user))
 
 
 # def reverse_unplanned(doc, method=None):
@@ -327,6 +462,48 @@
 #         frappe.db.set_value(LEDGER, o.name, "is_cancelled", 1, update_modified=False)
 #     for ref in refs:
 #         refresh_unplanned_row_summary(ref)
+#     _finalize_cancel(doc)  # [CHG-3]
+
+
+# def _finalize_cancel(doc):  # [CHG-3]
+#     """Runs after the planned engine's mr_on_cancel / po_on_cancel... AND our own reversal above,
+#     so it sees every reversal row. Lowers QTY by what the cancelled voucher had added, stamps the
+#     snapshot, and gives engine-made reversal rows (blank event_type) the 'Cancel' event."""
+#     rows = frappe.get_all(
+#         LEDGER,
+#         filters={"voucher_type": doc.doctype, "voucher_no": doc.name, "is_unplanned": 1,
+#                  "reversal_of": ["is", "set"], "snapshot_captured": 0},
+#         fields=["name", "reversal_of", "irpo_unplanned_row_ref as ref"], order_by="creation asc",
+#     )
+#     by_ref = {}
+#     for r in rows:
+#         by_ref.setdefault(r.ref, []).append(r)
+#     for ref, rs in by_ref.items():
+#         _lock_ref(ref)
+#         before = _state(ref)
+#         qty_before, avail_before = flt(before.qty), flt(before.irpo_available_qty)
+#         lowered = 0.0
+#         if LOWER_TOTAL_ON_CANCEL:
+#             for r in rs:
+#                 orig = frappe.db.get_value(LEDGER, r.reversal_of, ["unplanned_qty_added", "total_reversed"], as_dict=True)
+#                 if orig and flt(orig.unplanned_qty_added) > TOL and not orig.total_reversed:
+#                     lowered += flt(orig.unplanned_qty_added)
+#                     frappe.db.set_value(LEDGER, r.reversal_of, "total_reversed", 1, update_modified=False)
+#         if lowered > TOL:
+#             try:
+#                 new_total = lowered_total(qty_before, lowered, sum(flt(_balances(ref).get(s)) for s in SUMMARY_FIELD))
+#             except UnplannedQtyError as e:
+#                 frappe.throw(_("Unplanned Row {0}: {1}").format(ref, str(e)))
+#             frappe.db.set_value(UNPLANNED_DT, before.name, "qty", new_total, update_modified=False)
+#         refresh_unplanned_row_summary(ref)
+#         _stamp_snapshots([r.name for r in rs], ref, qty_before, avail_before, fix_event=True)
+#         if lowered > TOL:
+#             after = _state(ref)
+#             _task_comment(before.parent, (
+#                 "<b>Unplanned Item Qty Reversed</b> ({dt} {no} cancelled)<br>Item: {item} - {name} ({ref})<br>"
+#                 "Total Unplanned Qty: {tb:g} &rarr; {ta:g}").format(
+#                     dt=doc.doctype, no=doc.name, item=before.item, name=before.item_name, ref=ref,
+#                     tb=qty_before, ta=flt(after.qty)))
 
 
 # def refresh_unplanned_row_summary(ref):
@@ -354,6 +531,24 @@
 #         doc.item_name = (info and info.item_name) or frappe.db.get_value("Item", doc.item, "item_name")
 #     if not doc.get("irpo_item_type") and info:
 #         doc.irpo_item_type = info.irpo_item_type
+
+
+# # --------------------------------------------------------------------------
+# # [CHG-4] Task-based MR may only use IRPO Available Qty   (MR.before_submit)
+# # --------------------------------------------------------------------------
+# def validate_task_mr_available(doc, method=None):
+#     if doc.doctype != "Material Request" or not cint(doc.get("is_created_from_task")):
+#         return
+#     need = {}
+#     for r in _unplanned_lines(doc):
+#         need[r.cpc_irpo_unplanned_row_ref] = need.get(r.cpc_irpo_unplanned_row_ref, 0) + _row_qty(r)
+#     for ref, qty in need.items():
+#         _lock_ref(ref)
+#         st = _state(ref)
+#         try:
+#             check_consumption(qty, available_qty(st.qty, _balances(ref)))
+#         except UnplannedQtyError as e:
+#             frappe.throw(_("Unplanned Row {0} ({1}): {2}").format(ref, st.item, str(e)))
 
 
 # # --------------------------------------------------------------------------
@@ -453,34 +648,19 @@
 #     for r in t.get(UNPLANNED_FIELD) or []:
 #         if rows and r.name not in rows:
 #             continue
-#         expected = flt(r.get("qty"))
-#         if expected > 0:
-#             if flt(r.get("irpo_available_qty")) <= 0:
-#                 continue  # everything expected has already been requested (same rule as planned rows)
-#             qty = flt(r.irpo_available_qty)
-#         else:
-#             qty = 1  # no expected qty entered on the Task row: user edits it on the MR
+#         # [CHG-6] a Task-based MR draws from Available only (the qty-1 fallback for rows
+#         # with no expected qty is removed: it would be rejected at submit by CHG-4)
+#         qty = flt(r.get("irpo_available_qty"))
+#         if qty <= 0:
+#             continue
 #         mr.append("items", {
 #             "item_code": r.item, "item_name": r.item_name, "uom": r.uom, "stock_uom": r.uom, "qty": qty,
 #             "schedule_date": mr.schedule_date, "project": t.project, "task": t.name, "cpc_irpo": t.name,
 #             "cpc_irpo_unplanned_row_ref": r.unplanned_row_ref, "expense_account": t.account, "custom_irpo_item_type":r.irpo_item_type,
 #         })
 #     if not mr.items:
-#         frappe.throw(_("No Unplanned Items with available quantity remain on IRPO {0}. Nothing to request.").format(task))
+#         frappe.throw(_("No Unplanned Items with available quantity remain on IRPO {0}. Nothing to request. Use a direct Material Request to add new quantity.").format(task))
 #     return mr
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -505,13 +685,20 @@ IRPO Quantity Ledger (rows flagged is_unplanned = 1).
 
 Package: cpc_construction_management.cpc_construction_management.budget.irpo_unplanned
 
-Everything new in the 21-Oct enhancement is marked  # [CHG-n]  so `git diff` is easy to review:
+Everything new in the 21-Oct-2026 enhancement is marked  # [CHG-n]  so `git diff` is easy to review:
   CHG-1 validate_unplanned_rows : block decrease, collect revisions for the ledger/Activity
   CHG-2 post_unplanned          : Direct MR (or excess over source) raises the row QTY; snapshots
   CHG-3 reverse_unplanned       : cancel lowers QTY back, stamps reversal rows (+ event type)
   CHG-4 validate_task_mr_available (new, MR before_submit)
   CHG-5 log_unplanned_revisions    (new, Task on_update)
   CHG-6 make_material_request_from_unplanned : Task-based MR uses Available only
+
+UAT fixes (02-Nov-2026) are marked  # [UAT-n]:
+  UAT-1 post_unplanned          : Direct PO (Get Items From -> IRPO) consumes Available, never raises QTY
+  UAT-2 validate_direct_po_available (new, PO before_submit): Direct PO may not exceed Available
+  UAT-3 _already_posted        : locking-read idempotency check (concurrent submit safe)
+  UAT-4 warn_unplanned_budget  : do not count the source PO commitment twice on PR / PI
+  UAT-5 resolve_irpo_lines     : Direct MR takes the IRPO Task's expense account
 """
 import frappe
 from frappe import _
@@ -543,6 +730,10 @@ EV_REVISION = "Unplanned Qty Revision - Task"
 # Spec is silent on cancelling a Direct MR. True  = the quantity that MR introduced is withdrawn
 # (QTY goes back down). False = it stays on the row and becomes Available (old behaviour).
 LOWER_TOTAL_ON_CANCEL = True
+
+# [UAT-5] Direct MR takes the IRPO Task's expense account (Task-based MR already does).
+# Set False if the business wants the Item Default account at Material Request stage.
+MR_USES_IRPO_ACCOUNT = True
 
 ITEM_DT = {
     "Material Request": "Material Request Item",
@@ -742,6 +933,9 @@ def resolve_irpo_lines(doc, method=None):
         if not row.get("project"):
             row.project = task_doc.project
         row.task = task
+        # [UAT-5] keep the Expense Account consistent with the IRPO Task through the whole flow
+        if MR_USES_IRPO_ACCOUNT and doc.doctype == "Material Request" and task_doc.get("account"):
+            row.expense_account = task_doc.account
 
         uref = row.get("cpc_irpo_unplanned_row_ref")
         if uref and not frappe.db.exists(UNPLANNED_DT, {"unplanned_row_ref": uref, "parent": task, "item": row.item_code}):
@@ -843,6 +1037,16 @@ def _source_info(doc, row):
     return src, has_mr, has_po, has_pr
 
 
+def _is_direct_po_row(doc, row):  # [UAT-1]
+    """A PO line that carries an unplanned ref but has no MR behind it was pulled from the Task
+    (Get Items From -> IRPO). It CONSUMES IRPO Available Qty; it is not new unplanned quantity."""
+    return (
+        doc.doctype == "Purchase Order"
+        and bool(row.get("cpc_irpo_unplanned_row_ref"))
+        and not _po_source_mr_item(row)
+    )
+
+
 def carry_forward_unplanned(doc, method=None):
     for row in doc.get("items") or []:
         if row.get("cpc_irpo_unplanned_row_ref"):
@@ -886,16 +1090,24 @@ def _insert_ledger(values):
     return led
 
 
+def _already_posted(doc, row):  # [UAT-3]
+    """Locking (current) read: sees rows committed by a concurrent submit of the same voucher.
+    A plain SELECT / frappe.db.exists() uses the transaction snapshot and can miss them."""
+    return bool(frappe.db.sql(
+        """select name from `tabIRPO Quantity Ledger`
+           where voucher_type=%s and voucher_no=%s and voucher_detail_no=%s
+             and is_unplanned=1 and is_cancelled=0 and ifnull(reversal_of,'')=''
+           limit 1 for update""",
+        (doc.doctype, doc.name, row.name)))
+
+
 def post_unplanned(doc, method=None):
     # [CHG-2] a Task-based MR draws from Available; every other MR is a Direct MR
     is_task_mr = doc.doctype == "Material Request" and cint(doc.get("is_created_from_task"))
     for row in _unplanned_lines(doc):
         ref = row.cpc_irpo_unplanned_row_ref
         _lock_ref(ref)
-        if frappe.db.exists(LEDGER, {
-            "voucher_type": doc.doctype, "voucher_no": doc.name, "voucher_detail_no": row.name,
-            "is_unplanned": 1, "is_cancelled": 0, "reversal_of": ["is", "not set"],
-        }):
+        if _already_posted(doc, row):  # [UAT-3]
             continue  # idempotent
 
         info = frappe.db.get_value(UNPLANNED_DT, {"unplanned_row_ref": ref}, ["item_name", "irpo_item_type", "uom"], as_dict=True)
@@ -906,7 +1118,9 @@ def post_unplanned(doc, method=None):
         # [CHG-2] new quantity (Direct MR, or the part of a PO/PR/PI larger than its source) raises QTY
         before = _state(ref)
         qty_before, avail_before = flt(before.qty), flt(before.irpo_available_qty)
-        added = 0.0 if is_task_mr else fresh_qty(_row_qty(row), src_stage, balance)
+        # [UAT-1] a Task-based MR and a Direct PO (Get Items From -> IRPO) consume Available; they never raise QTY
+        consumes_available = is_task_mr or _is_direct_po_row(doc, row)
+        added = 0.0 if consumes_available else fresh_qty(_row_qty(row), src_stage, balance)
         if added > TOL:
             frappe.db.set_value(UNPLANNED_DT, before.name, "qty", qty_before + added, update_modified=False)
         direct_mr = doc.doctype == "Material Request" and added > TOL
@@ -1050,12 +1264,72 @@ def validate_task_mr_available(doc, method=None):
 
 
 # --------------------------------------------------------------------------
+# [UAT-2] Direct PO (Get Items From -> IRPO) may only use IRPO Available Qty   (PO.before_submit)
+# --------------------------------------------------------------------------
+def validate_direct_po_available(doc, method=None):  # [UAT-2]
+    """A Direct PO may not exceed IRPO Available Qty of the unplanned row."""
+    if doc.doctype != "Purchase Order":
+        return
+    need = {}
+    for r in _unplanned_lines(doc):
+        if _is_direct_po_row(doc, r):
+            ref = r.cpc_irpo_unplanned_row_ref
+            need[ref] = need.get(ref, 0) + _row_qty(r)  # several PO rows may share one ref
+
+    for ref in sorted(need):  # fixed lock order avoids deadlocks between two POs
+        _lock_ref(ref)
+        st = _state(ref)
+        avail = max(available_qty(st.qty, _balances(ref)), 0)
+        if need[ref] - avail > TOL:
+            frappe.throw(
+                _("Unplanned Row {0} ({1}): Direct PO quantity {2} {4} exceeds IRPO Available Qty {3} {4}. "
+                  "Reduce the quantity, increase the Task's Unplanned Qty, or use a Direct Material Request "
+                  "to add new quantity.").format(ref, st.item, f"{need[ref]:g}", f"{avail:g}", st.uom),
+                title=_("IRPO Available Qty Exceeded"),
+            )
+
+
+# --------------------------------------------------------------------------
 # Budget warning (never throws)   (before_submit for MR, PO, PR, PI)
 # --------------------------------------------------------------------------
 def get_irpo_amount_position(task, company=None, exclude_voucher=None):
     """Same helpers the planned flow uses, so both warnings agree."""
     budget = flt(frappe.db.get_value("Task", task, "cpc_budget_amount"))
     return budget, flt(get_committed_amount(task, exclude_voucher=exclude_voucher)), flt(get_actual_amount(task, company))
+
+
+def _po_item_for(doc, r):  # [UAT-4]
+    """The Purchase Order Item row this PR/PI line draws from (directly or via its PR)."""
+    if doc.doctype == "Purchase Receipt":
+        return r.get("purchase_order_item") or r.get("po_detail")
+    if doc.doctype == "Purchase Invoice":
+        if r.get("po_detail"):
+            return r.po_detail
+        if r.get("pr_detail"):
+            return frappe.db.get_value("Purchase Receipt Item", r.pr_detail, "purchase_order_item")
+    return None
+
+
+def _po_open_qty(poi):  # [UAT-4]
+    # MUST mirror how get_committed_amount() defines "open". Assumed: ordered - received.
+    # If it is based on billed qty instead, change this one line.
+    return max(flt(poi.qty) - flt(poi.received_qty), 0)
+
+
+def _commitment_released_by(doc, task):  # [UAT-4]
+    """Part of this PR/PI's amount that is already inside 'Committed (open PO)'."""
+    if doc.doctype not in ("Purchase Receipt", "Purchase Invoice"):
+        return 0.0
+    total = 0.0
+    for r in _unplanned_lines(doc):
+        if _task(r) != task:
+            continue
+        name = _po_item_for(doc, r)
+        poi = name and frappe.db.get_value(
+            "Purchase Order Item", name, ["qty", "received_qty", "rate"], as_dict=True)
+        if poi:
+            total += min(flt(r.qty), _po_open_qty(poi)) * flt(poi.rate)
+    return total
 
 
 def warn_unplanned_budget(doc, method=None):
@@ -1070,6 +1344,9 @@ def warn_unplanned_budget(doc, method=None):
     parts = [_("This document contains Unplanned Items / Services. Their cost is tracked against the IRPO but is not hard-blocked by the planned budget.")]
     for task, amt in per_task.items():
         budget, committed, actual = get_irpo_amount_position(task, doc.get("company"), doc.name)
+        # [UAT-4] on PR/PI the source PO is still open, so this document's own amount is already
+        # inside Committed. Remove it before "This Unplanned Amount" is added, or it is counted twice.
+        committed = max(committed - _commitment_released_by(doc, task), 0.0)
         if amt and budget:
             over = max(0.0, committed + actual + amt - budget)
             parts.append(_("<b>{0}</b>: IRPO Budget {1} | Committed (open PO) {2} | Actual (GL) {3} | This Unplanned Amount {4} | Expected Overrun {5}").format(
