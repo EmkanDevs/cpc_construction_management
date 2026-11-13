@@ -130,7 +130,7 @@ def get_project_financial_summary(project, company=None, from_date=None, to_date
 			"type": "info",
 			"code": "ZERO_BUDGET",
 			"label": _("Zero Budget"),
-			"message": _("The approved cost budget is zero SAR."),
+			"message": _("The approved cost budget is zero {0}.").format(currency),
 		})
 	elif budget_comparison.get("is_over_budget"):
 		quality_flags.append({

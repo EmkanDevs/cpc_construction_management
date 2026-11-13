@@ -1559,9 +1559,9 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 	</td>
 	<td class="planner-center">Lot</td>
 	<td class="planner-num">1</td>
-	<td class="planner-num">${format_currency(budget, "SAR")}</td>
-	<td class="planner-pending planner-num">${format_currency(remaining, "SAR")}</td>
-	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, "SAR")}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}" title="${consumed_of_budget}% ${__("allocated")}">${consumed_of_budget}%</span>` : ""}</div></td>
+	<td class="planner-num">${format_currency(budget, frappe.defaults.get_default("currency"))}</td>
+	<td class="planner-pending planner-num">${format_currency(remaining, frappe.defaults.get_default("currency"))}</td>
+	<td class="planner-consumed"><div class="planner-consumed-cell"><span>${format_currency(allocated, frappe.defaults.get_default("currency"))}</span>${budget > 0 ? `<span class="planner-consumed-pct${consumed_of_budget >= 100 ? " planner-consumed-pct-full" : ""}" title="${consumed_of_budget}% ${__("allocated")}">${consumed_of_budget}%</span>` : ""}</div></td>
 	<td class="planner-progress">${this._progress_cell(progress)}</td>
 	<td></td>
 	<td class="planner-status planner-center">${this._status_pill(this._group_status(node, children))}</td>
@@ -1586,7 +1586,7 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 	</td>
 	<td class="planner-center">${frappe.utils.escape_html(irpo.cpc_uom || "Percent")}</td>
 	<td class="planner-num">${flt(irpo.cpc_budget_qty) || "&mdash;"}</td>
-	<td class="planner-num">${format_currency(flt(irpo.cpc_budget_amount), "SAR")}</td>
+	<td class="planner-num">${format_currency(flt(irpo.cpc_budget_amount), frappe.defaults.get_default("currency"))}</td>
 	<td class="planner-pending planner-num">&mdash;</td>
 	<td class="planner-consumed planner-center">&mdash;</td>
 	<td class="planner-progress">${this._progress_cell(pct)}</td>
@@ -2458,14 +2458,14 @@ cpc_construction_management.contract_center.Planner = class IRPOPlanner {
 		const remaining = boq_budget - allocated - new_total;
 		const overrun = remaining < 0 ? -remaining : 0;
 		const remaining_str =
-			`${__("Remaining")}: <span class="${remaining < 0 ? "cc-break-summary-over" : ""}">${format_currency(remaining, "SAR")}</span>`;
+			`${__("Remaining")}: <span class="${remaining < 0 ? "cc-break-summary-over" : ""}">${format_currency(remaining, frappe.defaults.get_default("currency"))}</span>`;
 		const overrun_str = overrun > 0
 			? `<span class="cc-break-summary-over">${__("Exceeds BOQ Budget")}</span>`
 			: "";
 		$dlg.find("[data-break-budget-summary]").html(
-			`${__("BOQ Cost Budget")}: ${format_currency(boq_budget, "SAR")} | ` +
-			`${__("Already Allocated (existing IRPOs)")}: ${format_currency(allocated, "SAR")} | ` +
-			`${__("Net Change (This Dialog)")}: ${format_currency(new_total, "SAR")} | ` +
+			`${__("BOQ Cost Budget")}: ${format_currency(boq_budget, frappe.defaults.get_default("currency"))} | ` +
+			`${__("Already Allocated (existing IRPOs)")}: ${format_currency(allocated, frappe.defaults.get_default("currency"))} | ` +
+			`${__("Net Change (This Dialog)")}: ${format_currency(new_total, frappe.defaults.get_default("currency"))} | ` +
 			remaining_str +
 			(overrun_str ? ` ${overrun_str}` : "")
 		);

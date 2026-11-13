@@ -5,6 +5,7 @@
 from datetime import date
 
 import frappe
+from frappe import _
 from frappe.utils import getdate, now_datetime, nowdate
 
 APPROVER_ROLES = ("System Manager", "IRPO Progress Approver")
@@ -146,7 +147,7 @@ def hold_irpo(task_name, effective_date=None, reason=None):
 	events = _get_sorted_events(task_name)
 	_, currently_held = _current_hold_state(events)
 	if currently_held:
-		frappe.throw(f"{task_name} is already on Hold.")
+		frappe.throw(_("{0} is already on Hold.").format(task_name))
 	return record_status_event(task_name, "Hold", effective_date or nowdate(), reason)
 
 
@@ -156,7 +157,7 @@ def resume_irpo(task_name, effective_date=None, reason=None):
 	events = _get_sorted_events(task_name)
 	_, currently_held = _current_hold_state(events)
 	if not currently_held:
-		frappe.throw(f"{task_name} is not currently on Hold.")
+		frappe.throw(_("{0} is not currently on Hold.").format(task_name))
 	return record_status_event(task_name, "Resume", effective_date or nowdate(), reason)
 
 
@@ -171,7 +172,7 @@ def reopen_irpo(task_name, effective_date=None, reason=None):
 	_require_approver_role()
 	task = frappe.get_doc("Task", task_name)
 	if not task.get("custom_irpo_reporting_closed"):
-		frappe.throw(f"{task_name}'s reporting is not closed; nothing to reopen.")
+		frappe.throw(_("{0}'s reporting is not closed; nothing to reopen.").format(task_name))
 	return record_status_event(task_name, "Reopened", effective_date or nowdate(), reason)
 
 

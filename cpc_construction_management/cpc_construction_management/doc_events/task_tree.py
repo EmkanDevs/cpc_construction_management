@@ -225,6 +225,7 @@ def get_task_details(task_name):
 	if not task_name:
 		frappe.throw(_("Task name is required"))
 
+	frappe.has_permission("Task", "read", task_name, throw=True)
 	doc = frappe.get_doc("Task", task_name)
 	doc_dict = doc.as_dict()
 
@@ -291,6 +292,7 @@ def recalculate_project_cpm(project):
 	"""
 	if not project:
 		frappe.throw(_("Project is required"))
+	frappe.has_permission("Project", "read", project, throw=True)
 
 	tasks = frappe.get_all(
 		"Task",
